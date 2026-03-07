@@ -10874,29 +10874,28 @@ return;
         let _scanInterval = null;
         let _barcodeDetector = null;
 
-        async function abrirScanner(modo){
-
-    _scanModo = modo;
+        async function abrirScanner(){
 
     const modal = document.getElementById("modalScanner");
     modal.style.display = "flex";
 
-    document.getElementById("scanCamArea").style.display = "block";
+    const camArea = document.getElementById("scanCamArea");
+    camArea.style.display = "block";
+
+    const video = document.getElementById("scanVideo");
 
     try{
 
-        _scanStream = await navigator.mediaDevices.getUserMedia({
+        const stream = await navigator.mediaDevices.getUserMedia({
             video:{ facingMode:"environment" }
         });
 
-        const video = document.getElementById("scanVideo");
-        video.srcObject = _scanStream;
+        video.srcObject = stream;
 
-        await video.play();
+    }catch(err){
 
-    }catch(e){
-
-        console.log("Error cámara:", e);
+        console.log("Error cámara:", err);
+        alert("No se pudo abrir la cámara");
 
     }
 
