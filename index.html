@@ -428,10 +428,9 @@ height:100vh;
 display:none;
 align-items:center;
 justify-content:center;
-background:rgba(0,0,0,0.7);
-z-index:99999999;
+background:rgba(0,0,0,0.8);
+z-index:999999999;
 }
-
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
@@ -10950,7 +10949,7 @@ return;
 
     document.getElementById("scanVideo").srcObject = null;
 
-    document.getElementById("modalScanner").style.display = "none";
+    document.getElementById("modalScanner").style.display="flex";
 }
 
         function procesarCodigo(codigo) {
