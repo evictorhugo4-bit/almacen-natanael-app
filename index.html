@@ -11410,12 +11410,14 @@ z-index:999999999;
 </div>
 
 
+<script>
 (function fixModalMount(){
   const m = document.getElementById('modalScanner');
   if (m && m.parentElement !== document.body) {
-    document.body.appendChild(m); // lo saca del contenedor que lo recorta
+    document.body.appendChild(m);
   }
 })();
+</script>
 
 
 </body>
