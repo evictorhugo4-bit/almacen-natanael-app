@@ -3625,17 +3625,30 @@ setTimeout(() => {
     const productosPayload = carrito.map(i => {
         const prod = mapaProductos[i.id] || {};
         const esPeso = i.esPeso || esTipoVenta(prod.tipoVenta);
-        const precioVenta = esPeso
-    ? prod.precio
-    : i.precio;
-        const costo = prod.costo || 0;
-        const costoTotal = esPeso
-            ? Math.round(i.cantidad * costo)
-            : costo * i.cantidad;
-        const precioVenta2 = esClienteEspecial ? costoTotal : precioVenta;
-        const ganancia = esClienteEspecial ? 0 : precioVenta2 - costoTotal;
-        const _efPaga = Math.min(_efRest_v, precioVenta2);
-        _efRest_v = Math.max(0, _efRest_v - _efPaga);
+
+
+        const precioUnitario = esPeso ? prod.precio : i.precio;
+const costo = prod.costo || 0;
+
+const costoTotal = esPeso
+    ? Math.round(i.cantidad * costo)
+    : costo * i.cantidad;
+
+const importeVenta = esPeso
+    ? Math.round(i.cantidad * precioUnitario)
+    : (i.precio * i.cantidad);
+
+const precioVentaFinal = esClienteEspecial ? costoTotal : precioUnitario;
+
+const ganancia = esClienteEspecial
+    ? 0
+    : (importeVenta - costoTotal);
+
+const _efPaga = Math.min(_efRest_v, importeVenta);
+_efRest_v = Math.max(0, _efRest_v - _efPaga);
+
+
+
         return {
             id:           i.id || '',
             nombre:       i.nombre,
@@ -3648,12 +3661,12 @@ setTimeout(() => {
             departamento: prod.depto || '',
             precioCosto:  costo,
             costoTotal:   costoTotal,
-            precioVenta:  precioVenta2,
-            formaPago:    _efPaga <= 0 ? 'Crédito' : (_efPaga >= precioVenta2 ? 'Efectivo' : 'Mixto'),
-            pagoEfectivo: _efPaga,
-            pagoCredito:  Math.max(0, precioVenta2 - _efPaga),
-            pagoTotal:    precioVenta2,
-            ganancia:     ganancia
+            precioVenta:  precioVentaFinal,
+formaPago:    _efPaga <= 0 ? 'Crédito' : (_efPaga >= importeVenta ? 'Efectivo' : 'Mixto'),
+pagoEfectivo: _efPaga,
+pagoCredito:  Math.max(0, importeVenta - _efPaga),
+pagoTotal:    importeVenta,
+ganancia:     ganancia
         };
     });
 
