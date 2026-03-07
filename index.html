@@ -10862,6 +10862,7 @@ return;
         let _barcodeDetector = null;
 
         async function abrirScanner(modo) {
+
     _scanModo = modo;
 
     const labels = {
@@ -10876,31 +10877,37 @@ return;
     document.getElementById('scanNoEncontrado').classList.add('hidden');
     document.getElementById('scanStatus').classList.add('hidden');
 
+    // abrir modal
     toggleModal('modalScanner', true);
 
-    // 🔴 verificar soporte de cámara
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        _mostrarManual('Este dispositivo no tiene cámara. Ingresá el código manualmente.');
-        return;
-    }
+    // esperar a que el modal se renderice
+    setTimeout(async () => {
 
-    // 🔴 verificar soporte de BarcodeDetector
-    if (typeof BarcodeDetector === 'undefined') {
-        _mostrarManual('Este navegador no soporta escáner. Ingresá el código manualmente.');
-        return;
-    }
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            _mostrarManual('Este dispositivo no tiene cámara. Ingresá el código manualmente.');
+            return;
+        }
 
-    try {
-        const formats = await BarcodeDetector.getSupportedFormats();
-        _barcodeDetector = new BarcodeDetector({ formats });
+        if (typeof BarcodeDetector === 'undefined') {
+            _mostrarManual('Este navegador no soporta escáner. Ingresá el código manualmente.');
+            return;
+        }
 
-        await _iniciarCamara();
+        try {
 
-    } catch (e) {
-        _mostrarManual('No se pudo iniciar la cámara. Ingresá el código manualmente.');
-    }
+            const formats = await BarcodeDetector.getSupportedFormats();
+            _barcodeDetector = new BarcodeDetector({ formats });
+
+            await _iniciarCamara();
+
+        } catch (e) {
+
+            _mostrarManual('No se pudo iniciar la cámara. Ingresá el código manualmente.');
+
+        }
+
+    }, 300); // ← esto evita que el modal se cierre
 }
-
         function _mostrarManual(msg) {
             document.getElementById('scanCamArea').style.display = 'none';
             const st = document.getElementById('scanStatus');
