@@ -3626,8 +3626,8 @@ setTimeout(() => {
         const prod = mapaProductos[i.id] || {};
         const esPeso = i.esPeso || esTipoVenta(prod.tipoVenta);
         const precioVenta = esPeso
-            ? (i.precioFinal || Math.round(i.cantidad * prod.precio))
-            : i.precio;
+    ? prod.precio
+    : i.precio;
         const costo = prod.costo || 0;
         const costoTotal = esPeso
             ? Math.round(i.cantidad * costo)
@@ -10852,6 +10852,7 @@ return;
                                 label: ctx => {
                                     const v = ctx.parsed.y ?? ctx.parsed ?? ctx.raw;
                                     return ' $' + Utils.fmt(v);
+
                                 }
                             }
                         }
