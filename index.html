@@ -2645,10 +2645,10 @@ CONFIRMAR PAGO
                     <div class="flex justify-between items-center border-t border-slate-800 pt-4">
                         <label class="text-[10px] font-black text-emerald-500 uppercase tracking-widest italic">Añadir Productos</label>
                         <div class="flex gap-2">
-                            <button onclick="abrirScanner('venta')" class="bg-slate-700 hover:bg-slate-600 text-emerald-400 px-3 py-2 rounded-lg font-black text-[10px] flex items-center gap-1 btn-action" title="Escanear código">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="12" y1="8" x2="12" y2="16"/></svg>
-                                SCAN
-                            </button>
+                           <button type="button" onclick="abrirScanner('venta')" class="bg-slate-700 hover:bg-slate-600 text-emerald-400 px-3 py-2 rounded-lg font-black text-[10px] flex items-center gap-1 btn-action" title="Escanear código">
+<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="12" y1="8" x2="12" y2="16"/></svg>
+SCAN
+</button>
                             <button onclick="abrirSelectorProducto()" class="bg-emerald-500 text-black px-4 py-2 rounded-lg font-black text-[10px] flex items-center gap-2 hover:bg-emerald-400 btn-action shadow-lg">
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="search" aria-hidden="true" class="lucide lucide-search w-4 h-4"><path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle></svg> BUSCAR
                         </button>
@@ -9183,8 +9183,8 @@ function verDetalleProveedor(tipo, id){
 
         // SINCRONIZACIÓN GOOGLE SHEETS — Tiempo real (30s)
         // ══════════════════════════════════════════════════════
-        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbxHJgkFBn1hom_XKJ1g8eCae49DUe7ZXJP5zzJ_pusQQL0jRlI21oQnkLHZGfCQhHih/exec';
-        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbxHJgkFBn1hom_XKJ1g8eCae49DUe7ZXJP5zzJ_pusQQL0jRlI21oQnkLHZGfCQhHih/exec';
+        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbzDX6PUCDQwcFWryy3Atp3gb8JNrjYiEPHKrETbSnbjNiHr5dWhu_w-ji5g0bYMHPpG/exec';
+        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbzDX6PUCDQwcFWryy3Atp3gb8JNrjYiEPHKrETbSnbjNiHr5dWhu_w-ji5g0bYMHPpG/exec';
         function fetchSheets(options) {
             if (!options || options.method !== 'POST') {
                 fetch(SHEETS_URL2).catch(()=>{});
@@ -10862,25 +10862,44 @@ return;
         let _barcodeDetector = null;
 
         async function abrirScanner(modo) {
-            _scanModo = modo;
-            const labels = { venta: 'Agregar a Venta', compra: 'Agregar a Compra', producto: 'Asignar a Producto' };
-            document.getElementById('scannerModoLabel').textContent = labels[modo] || '';
-            document.getElementById('scanInputManual').value = '';
-            document.getElementById('scanResultado').classList.add('hidden');
-            document.getElementById('scanNoEncontrado').classList.add('hidden');
-            document.getElementById('scanStatus').classList.add('hidden');
-            toggleModal('modalScanner', true);
+    _scanModo = modo;
 
-            if (typeof BarcodeDetector !== 'undefined') {
-                try {
-                    const formats = await BarcodeDetector.getSupportedFormats();
-                    _barcodeDetector = new BarcodeDetector({ formats });
-                    await _iniciarCamara();
-                } catch(e) { _mostrarManual('Cámara no disponible. Ingresá el código manualmente.'); }
-            } else {
-                _mostrarManual('Navegador sin soporte de escáner. Ingresá el código manualmente.');
-            }
-        }
+    const labels = {
+        venta: 'Agregar a Venta',
+        compra: 'Agregar a Compra',
+        producto: 'Asignar a Producto'
+    };
+
+    document.getElementById('scannerModoLabel').textContent = labels[modo] || '';
+    document.getElementById('scanInputManual').value = '';
+    document.getElementById('scanResultado').classList.add('hidden');
+    document.getElementById('scanNoEncontrado').classList.add('hidden');
+    document.getElementById('scanStatus').classList.add('hidden');
+
+    toggleModal('modalScanner', true);
+
+    // 🔴 verificar soporte de cámara
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        _mostrarManual('Este dispositivo no tiene cámara. Ingresá el código manualmente.');
+        return;
+    }
+
+    // 🔴 verificar soporte de BarcodeDetector
+    if (typeof BarcodeDetector === 'undefined') {
+        _mostrarManual('Este navegador no soporta escáner. Ingresá el código manualmente.');
+        return;
+    }
+
+    try {
+        const formats = await BarcodeDetector.getSupportedFormats();
+        _barcodeDetector = new BarcodeDetector({ formats });
+
+        await _iniciarCamara();
+
+    } catch (e) {
+        _mostrarManual('No se pudo iniciar la cámara. Ingresá el código manualmente.');
+    }
+}
 
         function _mostrarManual(msg) {
             document.getElementById('scanCamArea').style.display = 'none';
@@ -10926,8 +10945,24 @@ return;
             document.getElementById('scanResultado').classList.add('hidden');
             document.getElementById('scanNoEncontrado').classList.add('hidden');
 
-            const prod = productosDB.find(p => p.codigo && p.codigo.trim() === codigo);
-            if (prod) {
+            const prod = productosDB.find(p => {
+    if (!p.codigos) return false;
+
+    const lista = p.codigos
+        .split(',')
+        .map(c => c.trim())
+        .filter(c => c !== '');
+
+    return lista.includes(codigo);
+});
+           
+
+
+
+
+
+
+ if (prod) {
                 document.getElementById('scanProdNombre').textContent = prod.nombre;
                 document.getElementById('scanProdPrecio').textContent = '$' + Utils.fmt(prod.precio);
                 document.getElementById('scanResultado').classList.remove('hidden');
