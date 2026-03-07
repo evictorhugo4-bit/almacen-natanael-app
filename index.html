@@ -10883,26 +10883,20 @@ return;
 
     document.getElementById("scanCamArea").style.display = "block";
 
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        _mostrarManual("Este dispositivo no tiene cámara");
-        return;
-    }
-
-    if (typeof BarcodeDetector === "undefined") {
-        _mostrarManual("Este navegador no soporta escáner");
-        return;
-    }
-
     try{
 
-        const formats = await BarcodeDetector.getSupportedFormats();
-        _barcodeDetector = new BarcodeDetector({ formats });
+        _scanStream = await navigator.mediaDevices.getUserMedia({
+            video:{ facingMode:"environment" }
+        });
 
-        await _iniciarCamara();
+        const video = document.getElementById("scanVideo");
+        video.srcObject = _scanStream;
+
+        await video.play();
 
     }catch(e){
 
-        _mostrarManual("No se pudo iniciar la cámara");
+        console.log("Error cámara:", e);
 
     }
 
@@ -10935,21 +10929,14 @@ return;
             } catch(e) { _mostrarManual('Sin acceso a cámara. Activá los permisos o ingresá el código manualmente.'); }
         }
 
-        function cerrarScanner() {
+        function cerrarScanner(){
 
-    if (_scanInterval) { 
-        clearInterval(_scanInterval); 
-        _scanInterval = null; 
+    if(_scanStream){
+        _scanStream.getTracks().forEach(t=>t.stop());
     }
 
-    if (_scanStream) { 
-        _scanStream.getTracks().forEach(t => t.stop()); 
-        _scanStream = null; 
-    }
+    document.getElementById("modalScanner").style.display="none";
 
-    document.getElementById("scanVideo").srcObject = null;
-
-    document.getElementById("modalScanner").style.display="flex";
 }
 
         function procesarCodigo(codigo) {
@@ -11384,48 +11371,36 @@ window.onload = function () {
     </div>
 
 
-<div id="modalScanner" class="modal-overlay">
-        <div class="glass-card w-full max-w-sm rounded-[2rem] overflow-hidden border-2 border-emerald-500/40 m-4">
-            <div class="p-4 bg-slate-800/50 border-b border-slate-700 flex justify-between items-center">
-                <div>
-                    <h3 class="text-sm font-black text-white uppercase italic">Escanear Código</h3>
-                    <p id="scannerModoLabel" class="text-[9px] text-emerald-400 font-bold uppercase mt-0.5"></p>
-                </div>
-                <button onclick="cerrarScanner()" class="text-slate-400 hover:text-white">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-                </button>
-            </div>
-            <div id="scanCamArea" style="display:block;position:relative;background:#000;">
-                <video id="scanVideo" autoplay playsinline muted style="width:100%;max-height:240px;object-fit:cover;display:block;"></video>
-                <div style="position:absolute;inset:0;pointer-events:none;">
-                    <div style="position:absolute;left:15%;right:15%;top:15%;bottom:15%;border:2px solid rgba(16,185,129,0.6);border-radius:8px;"></div>
-                    <div id="scanLine" style="position:absolute;left:15%;right:15%;height:2px;background:linear-gradient(90deg,transparent,#10b981,transparent);top:15%;animation:scanAnim 1.5s ease-in-out infinite;"></div>
-                </div>
-            </div>
-            <div class="p-5 space-y-3">
-                <p id="scanStatus" class="text-[10px] text-slate-500 font-bold uppercase text-center hidden"></p>
-                <div id="scanResultado" class="hidden bg-slate-900 rounded-xl p-3 border border-emerald-500/30">
-                    <p class="text-[9px] font-black text-emerald-500 uppercase mb-1">✓ Producto encontrado</p>
-                    <p id="scanProdNombre" class="text-sm font-black text-white uppercase"></p>
-                    <p id="scanProdPrecio" class="text-xs text-emerald-400 font-mono font-black mt-0.5"></p>
-                </div>
-                <div id="scanNoEncontrado" class="hidden bg-slate-900 rounded-xl p-3 border border-red-500/40">
-                    <p class="text-[9px] font-black text-red-400 uppercase mb-1">⚠ Código no encontrado</p>
-                    <p id="scanCodigoLeido" class="text-xs font-mono text-slate-400"></p>
-                </div>
-                <div>
-                    <label class="text-[9px] font-black text-emerald-500 uppercase tracking-widest block mb-1">O ingresá el código manualmente</label>
-                    <div class="flex gap-2">
-                        <input type="text" id="scanInputManual" placeholder="Código de barras..."
-                            class="flex-1 font-mono text-sm"
-                            onkeydown="if(event.key==='Enter'){event.preventDefault();procesarCodigo(this.value);}">
-                        <button onclick="procesarCodigo(document.getElementById('scanInputManual').value)"
-                            class="px-4 py-2 bg-emerald-500 text-black font-black text-xs rounded-xl hover:bg-emerald-400 btn-action shrink-0">OK</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+<div id="modalScanner" style="
+position:fixed;
+top:0;
+left:0;
+width:100vw;
+height:100vh;
+background:rgba(0,0,0,0.8);
+display:none;
+align-items:center;
+justify-content:center;
+z-index:999999999;
+">
 
+<div style="
+background:#111;
+padding:20px;
+border-radius:12px;
+width:320px;
+color:white;
+text-align:center;
+">
+
+<h2>Scanner</h2>
+
+<video id="scanVideo" autoplay playsinline style="width:100%;background:black;"></video>
+
+<button onclick="cerrarScanner()">Cerrar</button>
+
+</div>
+
+</div>
 
 </body></html>
