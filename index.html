@@ -10876,28 +10876,20 @@ return;
 
         async function abrirScanner(){
 
-    const modal = document.getElementById("modalScanner");
-    modal.style.display = "flex";
+const modal=document.getElementById("modalScanner");
+modal.style.display="flex";
 
-    const camArea = document.getElementById("scanCamArea");
-    camArea.style.display = "block";
+const video=document.getElementById("scanVideo");
 
-    const video = document.getElementById("scanVideo");
+if(video.srcObject){
+video.srcObject.getTracks().forEach(t=>t.stop());
+}
 
-    try{
+const stream=await navigator.mediaDevices.getUserMedia({
+video:{facingMode:"environment"}
+});
 
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video:{ facingMode:"environment" }
-        });
-
-        video.srcObject = stream;
-
-    }catch(err){
-
-        console.log("Error cámara:", err);
-        alert("No se pudo abrir la cámara");
-
-    }
+video.srcObject=stream;
 
 }
         function _mostrarManual(msg) {
