@@ -795,6 +795,47 @@ z-index:999999999;
         </div>
     </main>
 
+
+<div id="modalNuevoProducto" class="hidden fixed inset-0 flex items-center justify-center bg-black/60 z-50">
+<div class="bg-slate-900 p-4 rounded-xl w-[420px]">
+
+<h2 class="text-emerald-400 font-black text-sm mb-3">CREAR PRODUCTO</h2>
+
+<input id="nuevoNombre" placeholder="Nombre"
+class="w-full mb-2 p-2 bg-slate-800 rounded">
+
+<input id="nuevoCosto" type="number" placeholder="Precio costo"
+class="w-full mb-2 p-2 bg-slate-800 rounded">
+
+<input id="nuevoVenta" type="number" placeholder="Precio venta"
+class="w-full mb-2 p-2 bg-slate-800 rounded">
+
+<select id="nuevoProveedor" class="w-full mb-2 p-2 bg-slate-800 rounded"></select>
+
+<select id="nuevoCategoria" class="w-full mb-2 p-2 bg-slate-800 rounded"></select>
+
+<select id="nuevoDepartamento" class="w-full mb-2 p-2 bg-slate-800 rounded"></select>
+
+<select id="nuevoTipoVenta" class="w-full mb-3 p-2 bg-slate-800 rounded">
+<option value="Unidad">Unidad</option>
+<option value="Gramos">Gramos</option>
+</select>
+
+<button onclick="guardarNuevoProducto()"
+class="bg-emerald-500 w-full p-2 font-black rounded">
+GUARDAR PRODUCTO
+</button>
+
+</div>
+</div>
+
+
+
+
+
+
+
+
     <!-- MODAL EDITOR CLIENTE -->
     <div id="modalCliente" class="modal-overlay">
         <div class="glass-card w-full max-w-md rounded-[2rem] p-8 space-y-5 border-2 border-emerald-500/30 max-h-[90vh] overflow-y-auto custom-scrollbar">
@@ -4625,6 +4666,7 @@ container.innerHTML = productosVisibles.map((p) => {
         function numVal(id) { const v = parseFloat(val(id)); return isNaN(v) ? null : v; }
 
         function abrirEditorProducto(index = -1) {
+cargarOpcionesProducto();
             document.getElementById('formProducto').reset();
             document.getElementById('editIndex').value = index;
             document.getElementById('tituloModalProd').textContent = index === -1 ? 'Nuevo Producto' : 'Editar Producto';
@@ -5999,6 +6041,23 @@ title="Registrar pago"><svg xmlns="http://www.w3.org/2000/svg" width="13" height
             }).join('');
         }
 
+
+
+function abrirModalNuevoProducto(nombre){
+
+document.getElementById("nuevoNombre").value = nombre || "";
+
+document.getElementById("modalNuevoProducto").classList.remove("hidden");
+
+}
+
+function cerrarModalNuevoProducto(){
+
+document.getElementById("modalNuevoProducto").classList.add("hidden");
+
+}
+
+
         function abrirNuevoIngNeg(tipo) {
             ingNegTipo = tipo;
             const isIng = tipo === 'ingresosNegocio';
@@ -6365,14 +6424,111 @@ function selGeneroIngEgr(val){
     }
 }
 
-        function filtrarProductosCompra(query) {
+
+function crearProductoCompra(nombre) {
+
+    if (!nombre) {
+        nombre = prompt("Nombre del producto");
+    }
+
+    if (!nombre) return;
+
+    nombre = nombre.toUpperCase().trim();
+
+    // 🔍 verificar si ya existe
+    const existente = productosDB.find(p => p.nombre === nombre);
+
+    if (existente) {
+
+        mostrarToast("El producto ya existe");
+
+        // abrir el selector del producto existente
+        const idx = productosDB.indexOf(existente);
+        seleccionarProductoCompra(idx);
+
+        return;
+    }
+
+    const nuevoProducto = {
+        id: Utils.genId(),
+        nombre: nombre,
+        costo: 0,
+        precio: 0,
+        proveedor: "",
+        categoria: "",
+        depto: "",
+        tipoVenta: "Unidad",
+        stock: 0,
+        stockCalculado: 0,
+        foto: ""
+    };
+
+    productosDB.push(nuevoProducto);
+
+    localStorage.setItem(
+        'natanael_inventory_v3',
+        JSON.stringify(productosDB)
+    );
+
+    const index = productosDB.length - 1;
+
+// abrir el editor completo del producto
+abrirEditorProducto(index);
+
+    mostrarToast("Producto creado. Complete costo y venta.");
+}
+
+
+
+function cargarOpcionesProducto(){
+
+const categorias = [...new Set(productosDB.map(p => p.categoria).filter(Boolean))];
+const departamentos = [...new Set(productosDB.map(p => p.depto).filter(Boolean))];
+const proveedores = [...new Set(productosDB.map(p => p.proveedor).filter(Boolean))];
+
+const selCat = document.getElementById("pCategoria");
+const selDepto = document.getElementById("pDepto");
+const selProv = document.getElementById("pProveedor");
+
+if(selCat){
+selCat.innerHTML =
+'<option value="">Seleccionar</option>' +
+categorias.map(c => `<option value="${c}">${c}</option>`).join("");
+}
+
+if(selDepto){
+selDepto.innerHTML =
+'<option value="">Seleccionar</option>' +
+departamentos.map(d => `<option value="${d}">${d}</option>`).join("");
+}
+
+if(selProv){
+selProv.innerHTML =
+'<option value="">Seleccionar</option>' +
+proveedores.map(p => `<option value="${p}">${p}</option>`).join("");
+}
+
+}
+
+function filtrarProductosCompra(query) {
             const container = document.getElementById('listaProductosCatalogoCompra');
             const filtrados = productosDB.map((p,i) => ({...p,_idx:i}))
                 .filter(p => p.nombre.toLowerCase().includes(query.toLowerCase()));
             if (filtrados.length === 0) {
-                container.innerHTML = '<p class="text-[10px] text-slate-500 text-center py-4 font-bold uppercase">Sin resultados</p>';
-                return;
-            }
+    container.innerHTML = `
+        <div class="text-center py-4">
+            <p class="text-[10px] text-slate-500 font-bold uppercase mb-2">
+                Sin resultados
+            </p>
+
+            <button onclick="crearProductoCompra('${query.replace(/'/g,"")}')"
+                class="bg-emerald-500 text-black font-bold px-3 py-2 rounded-lg text-xs">
+                + Crear "${Utils.escHtml(query)}"
+            </button>
+        </div>
+    `;
+    return;
+}
             const colors = ['#10b981','#3b82f6','#f59e0b','#8b5cf6','#ec4899','#06b6d4'];
             container.innerHTML = filtrados.map(p => {
                 const initials = p.nombre.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
@@ -6392,18 +6548,26 @@ function selGeneroIngEgr(val){
             }).join('');
         }
 
-        function seleccionarProductoCompra(idx) {
+
+
+
+
+
+
+
+    function seleccionarProductoCompra(idx) {
 
     const prod = productosDB[idx];
     if (!prod) return;
 
     productoPendienteCompra = {
-        idx,
-        id: prod.id,
-        nombre: prod.nombre,
-        costo: prod.costo || 0,
-        foto: prod.foto || ''
-    };
+    idx,
+    id: prod.id,
+    nombre: prod.nombre,
+    costo: prod.costo || 0,
+    foto: prod.foto || '',
+    margenBruto: prod.margenBruto || 0
+};
 
     cerrarCatalogoCompra();
 
@@ -6548,6 +6712,9 @@ function crearModalPreciosSiNoExiste(){
                        style="width:100%;margin-top:5px;padding:8px;background:#0f172a;color:white;border:1px solid #334155;border-radius:8px;">
             </div>
 
+
+
+
             <div style="margin-bottom:20px;">
                 <div style="color:#94a3b8;font-size:12px;">PRECIO DE VENTA</div>
                 <input id="editVentaInput" type="number"
@@ -6578,9 +6745,30 @@ function crearModalPreciosSiNoExiste(){
 
 
 
+function calcularPrecioSugerido(itemId, costo){
+console.log("CALCULANDO", itemId, costo);
 
+costo = parseFloat(costo) || 0;
 
+const item = carritoCompra.find(i => String(i.itemId) === String(itemId));
+if(!item) return;
 
+const prod = productosDB.find(p => String(p.id) === String(item.id));
+if(!prod) return;
+
+const margen = parseFloat(prod.margenBruto || 0);
+
+if(!costo || !margen) return;
+
+const sugerido = costo * (1 + ((margen/100) / (1 - (margen/100))));
+
+const campo = document.getElementById("precioSugerido_"+itemId);
+
+if(campo){
+campo.value = sugerido.toFixed(2);
+}
+
+}
 
 
 
@@ -6601,6 +6789,7 @@ function crearModalPreciosSiNoExiste(){
             const colors = ['#10b981','#3b82f6','#f59e0b','#8b5cf6','#ec4899','#06b6d4'];
             container.innerHTML = carritoCompra.map(item => {
 
+const subtotal = item.cantidad * (item.costo || 0);
 const editando = String(itemEnEdicion) === String(item.itemId);
                 const color = colors[item.nombre.charCodeAt(0) % colors.length];
                 const initials = item.nombre.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
@@ -6633,16 +6822,22 @@ ${thumb}
     </div>
 
     <input type="number"
-        value="${item.costo}"
-        onchange="guardarCosto('${item.itemId}', this.value)"
-        placeholder="PRECIO COSTO"
-        style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:5px;color:white;">
+value="${item.costo}"
+oninput="guardarCosto('${item.itemId}', this.value);calcularPrecioSugerido('${item.itemId}', this.value)"
+placeholder="PRECIO COSTO">
 
-    <input type="number"
-        value="${item.venta || 0}"
-        onchange="guardarVenta('${item.itemId}', this.value)"
-        placeholder="PRECIO VENTA"
-        style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:5px;color:white;">
+<input
+id="precioSugerido"
+readonly
+placeholder="PRECIO SUGERIDO"
+style="background:#020617;border:1px solid #334155;border-radius:8px;padding:6px;color:#22c55e;font-weight:bold;">
+
+
+<input type="number"
+value="${item.venta || 0}"
+onchange="guardarVenta('${item.itemId}', this.value)"
+placeholder="PRECIO VENTA"
+style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:5px;color:white;">
 
     <button onclick="itemEnEdicion=null;renderCarritoCompra();"
         style="background:#22c55e;color:black;font-weight:bold;padding:5px;border-radius:8px;">
@@ -6657,6 +6852,9 @@ ${thumb}
     ${Utils.escHtml(item.nombre)}
 </span>
 
+<span class="font-mono font-bold text-white text-xs">
+    $${Utils.fmt(subtotal)}
+</span>
 `}
 
                    
@@ -6696,6 +6894,7 @@ ${thumb}
 
 
 
+
 function abrirModalPrecios(itemId){
     console.log("🔍 abrirModalPrecios llamado con:", itemId);
     console.log("carritoCompra:", carritoCompra);
@@ -6730,7 +6929,39 @@ function abrirModalPrecios(itemId){
     console.log("Venta:", ventaInput.value);
 
     // Agregar listeners para calcular ganancia
-    costoInput.oninput = function() { actualizarGananciaMostrada(); };
+
+
+
+
+    costoInput.oninput = function() {
+
+const costo = parseFloat(this.value) || 0;
+
+const prod = productosDB.find(p => String(p.id) === String(item.id));
+if(!prod) return;
+
+const margen = parseFloat(prod.margenBruto || 0);
+
+if(costo && margen){
+
+const sugerido = costo * (1 + ((margen/100) / (1 - (margen/100))));
+
+const sugeridoInput = document.getElementById("precioSugerido");
+
+if(sugeridoInput){
+sugeridoInput.value = sugerido.toFixed(2);
+}
+
+}
+
+actualizarGananciaMostrada();
+
+};
+
+
+
+
+
     ventaInput.oninput = function() { actualizarGananciaMostrada(); };
 
     actualizarGananciaMostrada();
@@ -11135,6 +11366,13 @@ video.srcObject=stream;
                style="width:100%;padding:12px;background:#0f172a;color:#10b981;border:2px solid #334155;border-radius:8px;font-weight:bold;font-size:15px;box-sizing:border-box;"
                placeholder="0.00">
     </div>
+
+<div class="mt-3">
+<label class="text-xs text-slate-400 font-bold">PRECIO SUGERIDO</label>
+<input id="precioSugerido"
+class="w-full mt-1 p-3 rounded-lg bg-slate-800 text-emerald-400 font-bold"
+readonly>
+</div>
 
     <div style="display:flex;flex-direction:column;gap:6px;">
         <label style="color:#94a3b8;font-size:11px;font-weight:bold;text-transform:uppercase;">Precio de Venta</label>
