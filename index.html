@@ -10874,45 +10874,23 @@ return;
         let _scanInterval = null;
         let _barcodeDetector = null;
 
-        <script>
-function abrirScanner() {
-  // crear modal si no existe
-  let m = document.getElementById('scannerModal');
-  if (!m) {
-    m = document.createElement('div');
-    m.id = 'scannerModal';
-    m.style.cssText = `
-      position:fixed; inset:0; background:rgba(0,0,0,.85);
-      display:flex; align-items:center; justify-content:center;
-      z-index:2147483647;
-    `;
-    m.innerHTML = `
-      <div style="width:360px;background:#111;color:#fff;padding:16px;border-radius:12px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <strong>Escáner</strong>
-          <button id="closeScanBtn" style="font-size:18px">✕</button>
-        </div>
-        <video id="scanVideo" autoplay playsinline style="width:100%;background:#000"></video>
-      </div>
-    `;
-    document.body.appendChild(m);
+        async function abrirScanner(){
 
-    document.getElementById('closeScanBtn').onclick = cerrarScanner;
-  } else {
-    m.style.display = 'flex';
-  }
+const modal=document.getElementById("modalScanner");
+modal.style.display="flex";
 
-  // abrir cámara
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-    .then(stream => {
-      const v = document.getElementById('scanVideo');
-      v.srcObject = stream;
-      window._scanStream = stream;
-    })
-    .catch(err => {
-      alert('No se pudo abrir la cámara: ' + err.message);
-      console.error(err);
-    });
+const video=document.getElementById("scanVideo");
+
+if(video.srcObject){
+video.srcObject.getTracks().forEach(t=>t.stop());
+}
+
+const stream=await navigator.mediaDevices.getUserMedia({
+video:{facingMode:"environment"}
+});
+
+video.srcObject=stream;
+
 }
         function _mostrarManual(msg) {
             document.getElementById('scanCamArea').style.display = 'none';
@@ -11409,15 +11387,6 @@ z-index:999999999;
 
 </div>
 
-
-<script>
-(function fixModalMount(){
-  const m = document.getElementById('modalScanner');
-  if (m && m.parentElement !== document.body) {
-    document.body.appendChild(m);
-  }
-})();
-</script>
 
 
 
