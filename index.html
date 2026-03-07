@@ -10861,52 +10861,35 @@ return;
         let _scanInterval = null;
         let _barcodeDetector = null;
 
-        async function abrirScanner(modo) {
+        async function abrirScanner(modo){
 
     _scanModo = modo;
 
-    const labels = {
-        venta: 'Agregar a Venta',
-        compra: 'Agregar a Compra',
-        producto: 'Asignar a Producto'
-    };
+    document.getElementById("modalScanner").style.display = "flex";
 
-    document.getElementById('scannerModoLabel').textContent = labels[modo] || '';
-    document.getElementById('scanInputManual').value = '';
-    document.getElementById('scanResultado').classList.add('hidden');
-    document.getElementById('scanNoEncontrado').classList.add('hidden');
-    document.getElementById('scanStatus').classList.add('hidden');
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        _mostrarManual("Este dispositivo no tiene cámara");
+        return;
+    }
 
-    // abrir modal
-    toggleModal('modalScanner', true);
+    if (typeof BarcodeDetector === "undefined") {
+        _mostrarManual("Este navegador no soporta escáner");
+        return;
+    }
 
-    // esperar a que el modal se renderice
-    setTimeout(async () => {
+    try{
 
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            _mostrarManual('Este dispositivo no tiene cámara. Ingresá el código manualmente.');
-            return;
-        }
+        const formats = await BarcodeDetector.getSupportedFormats();
+        _barcodeDetector = new BarcodeDetector({ formats });
 
-        if (typeof BarcodeDetector === 'undefined') {
-            _mostrarManual('Este navegador no soporta escáner. Ingresá el código manualmente.');
-            return;
-        }
+        await _iniciarCamara();
 
-        try {
+    }catch(e){
 
-            const formats = await BarcodeDetector.getSupportedFormats();
-            _barcodeDetector = new BarcodeDetector({ formats });
+        _mostrarManual("No se pudo iniciar la cámara");
 
-            await _iniciarCamara();
+    }
 
-        } catch (e) {
-
-            _mostrarManual('No se pudo iniciar la cámara. Ingresá el código manualmente.');
-
-        }
-
-    }, 300); // ← esto evita que el modal se cierre
 }
         function _mostrarManual(msg) {
             document.getElementById('scanCamArea').style.display = 'none';
