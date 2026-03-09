@@ -3453,8 +3453,15 @@ _sheetProductos.forEach(p => {
         }
 
         function eliminarDelCarrito(itemId) {
-            carrito = carrito.filter(c => c.itemId !== itemId);
+            carrito = carrito.filter(c => String(c.itemId) !== String(itemId));
             renderCarrito();
+
+        function cambiarCantidadCarrito(itemId, delta) {
+            const item = carrito.find(c => String(c.itemId) === String(itemId));
+            if (!item) return;
+            item.cantidad = Math.max(1, (item.cantidad || 1) + delta);
+            renderCarrito();
+        }
         }
 
         function precioItem(item) {
@@ -3499,7 +3506,9 @@ _sheetProductos.forEach(p => {
 
                         <span class="font-mono font-black text-white shrink-0">$${Utils.fmt(precioItem(item))}</span>
                         <button onclick="abrirModalPrecioVenta(${item.itemId})" style="background:none;border:none;cursor:pointer;color:#fbbf24;font-size:14px;padding:2px 4px;border-radius:4px;" title="Editar precio de venta">✏️</button>
-                        <button onclick="eliminarDelCarrito(${item.itemId})" class="text-slate-600 hover:text-red-400 text-xs font-black shrink-0">✕</button>
+                        <button onclick="cambiarCantidadCarrito('${item.itemId}',-1)" style="background:#1e293b;border:1px solid #334155;color:#94a3b8;font-size:14px;font-weight:900;width:22px;height:22px;border-radius:4px;cursor:pointer;line-height:1;padding:0;">−</button>
+                        <button onclick="cambiarCantidadCarrito('${item.itemId}',+1)" style="background:#1e293b;border:1px solid #334155;color:#94a3b8;font-size:14px;font-weight:900;width:22px;height:22px;border-radius:4px;cursor:pointer;line-height:1;padding:0;">+</button>
+                        <button onclick="eliminarDelCarrito('${item.itemId}')" class="text-slate-600 hover:text-red-400 text-xs font-black shrink-0">✕</button>
                     </div>`;
                 }).join('');
             }
@@ -9345,18 +9354,16 @@ function calcularCajaEsperada() {
         window.onload = () => {
             renderHistorial();
             lucide.createIcons();
-            setTimeout(() => {
-                window.dispatchEvent(new Event('natanael-ready'));
-                const syncPromise = iniciarSyncSheets();
-                // Re-render tras sync por si el primer render fue prematuro
-                Promise.resolve(syncPromise).then(() => {
-                    setTimeout(() => {
-                        if (_sheetVentas && _sheetVentas.length > 0) {
-                            renderHistorialConSheet();
-                        }
-                    }, 500);
-                }).catch(() => {});
-            }, 800);
+            // Sin delay — sync inmediato al cargar
+            window.dispatchEvent(new Event('natanael-ready'));
+            const syncPromise = iniciarSyncSheets();
+            Promise.resolve(syncPromise).then(() => {
+                setTimeout(() => {
+                    if (_sheetVentas && _sheetVentas.length > 0) {
+                        renderHistorialConSheet();
+                    }
+                }, 300);
+            }).catch(() => {});
         };
 
 
