@@ -11317,7 +11317,8 @@ console.log("FILTRADAS:", filtradas.length);
                 const stockInicial = parseFloat(p.stockInicio || p.stockComienzo || 0) || 0;
                 const compras      = parseFloat(comprasPorNom[nom]||0);
                 const ventas       = parseFloat(ventasPorNom[nom]||0);
-                const stockActual  = parseFloat(p.stock||p.cantidad||0);
+                // Calcular igual que el Kardex: stockInicial + compras - ventas
+                const stockActual  = stockInicial + compras - ventas;
                 totSI += stockInicial; totC += compras; totV += ventas; totSA += stockActual;
                 const saColor = stockActual <= 0 ? 'text-red-400' : stockActual < 5 ? 'text-yellow-400' : 'text-emerald-400';
                 return `<tr class="hover:bg-slate-800/50 border-b border-slate-800">
