@@ -4911,11 +4911,13 @@ cargarOpcionesProducto();
                 costo: data.costo,
                 precioVenta: data.precio,
                 ganancia: ganancia,
-                foto: (() => { const img = document.getElementById('fotoPreviewImg'); return (!img.classList.contains('hidden') && img.src.startsWith('data:')) ? img.src : (_sheetProductos.find(p=>p.id===data.id)||{}).foto||''; })(),
+                // NO incluir foto en base64 — hace la URL demasiado larga y Google la corta
                 stockComienzo: data.stockInicio
             };
-            console.log('📤 PAYLOAD PRODUCTO → SHEETS:', JSON.stringify(prodPayload));
-            fetchSheets({method:'POST', body:JSON.stringify(prodPayload)});
+            // Enviar sin foto para no superar límite de URL de Apps Script
+            const prodPayloadSinFoto = Object.assign({}, prodPayload);
+            delete prodPayloadSinFoto.foto;
+            fetchSheets({method:'POST', body:JSON.stringify(prodPayloadSinFoto)});
 
             cerrarEditorProducto();
             renderInventario();
@@ -9713,14 +9715,16 @@ function verDetalleProveedor(tipo, id){
                         return r.json();
                     })
                     .then(d => {
-                        console.log('[Sheet] ✓ Respuesta:', d);
                         if (d && d.ok === false) {
                             mostrarToast('⚠ Sheet error: ' + (d.error || 'desconocido'), 'error');
+                        } else if (d && d.ok === true) {
+                            mostrarToast('✓ Sheet: guardado OK', 'success');
+                        } else {
+                            mostrarToast('⚠ Sheet respuesta rara: ' + JSON.stringify(d).substring(0,80), 'error');
                         }
                     })
                     .catch(e => {
-                        console.warn('[Sheet] ✗ Error fetch:', e);
-                        mostrarToast('⚠ No se pudo conectar al Sheet: ' + e.message, 'error');
+                        mostrarToast('✗ Sheet falló: ' + e.message, 'error');
                     });
             } catch(e) {
                 console.error('[Sheet error]', e);
