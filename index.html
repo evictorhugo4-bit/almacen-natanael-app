@@ -4910,10 +4910,11 @@ cargarOpcionesProducto();
                 stockVerificado: data.stockVerificado,
                 stockCorrecto: data.stockCorrecto,
                 fechaCantidad: data.fechaCantidad,
-                cantidad: data.stockCalculado ?? 0,
+                cantidad: data.stockCalculado ?? data.stock ?? 0,
                 costo: data.costo,
                 precioVenta: data.precio,
                 ganancia: ganancia,
+                codigos: data.codigos || data.codigo || '',
                 // NO incluir foto en base64 — hace la URL demasiado larga y Google la corta
                 stockComienzo: data.stockInicio
             };
