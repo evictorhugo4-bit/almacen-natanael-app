@@ -4608,7 +4608,10 @@ const productosVisibles = productosOrdenados.slice(0, PRODUCTOS_POR_RENDER);
 
 container.innerHTML = productosVisibles.map((p) => {
 
-    const index = _sheetProductos.indexOf(p);
+    // Buscar por id para evitar problemas de referencia tras sync
+    const index = _sheetProductos.findIndex(sp => sp.id && p.id && sp.id === p.id) !== -1
+        ? _sheetProductos.findIndex(sp => sp.id && p.id && sp.id === p.id)
+        : _sheetProductos.indexOf(p);
     const stockActual = p.stockCalculado ?? 0;
     const bajoMinimo = p.minimo && stockActual < p.minimo;
     const vencProx = p.fechaVencimiento && 
