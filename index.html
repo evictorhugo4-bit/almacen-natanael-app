@@ -4841,7 +4841,7 @@ cargarOpcionesProducto();
             }
 
             const data = {
-                id:               index === '-1' ? Utils.genId() : _sheetProductos[index].id,
+                id:               index === '-1' ? Utils.genId() : (_sheetProductos[index].id || _sheetProductos[index].IDPRODUCTOS || _sheetProductos[index].numeroProd || Utils.genId()),
                 codigo:           val('pCodigo').trim(),
                 codigos:          val('pCodigo').trim(), // mismo valor, indexarProductos usa 'codigos'
                 nombre:           val('pNombre').trim(),
@@ -4891,7 +4891,7 @@ cargarOpcionesProducto();
             const prodPayload = {
                 tipo: 'producto',
                 id: data.id,
-                numeroProd: data.numeroProd || data.id,
+                numeroProd: data.id,
                 nombre: data.nombre,
                 margenBruto: margen,
                 proveedor: data.proveedor,
@@ -10184,6 +10184,9 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
 
         if (prod) {
             // actualizar producto existente con datos frescos del sheet
+            prod.id         = id;        // siempre sincronizar el id con IDPRODUCTOS del sheet
+            prod.numeroProd = id;
+            prod.nombre     = nombre || prod.nombre;
             prod.stock      = stock;
             prod.costo      = costo     || prod.costo;
             prod.precio     = precio    || prod.precio;
