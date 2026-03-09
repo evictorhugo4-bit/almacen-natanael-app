@@ -4919,7 +4919,7 @@ cargarOpcionesProducto();
             delete prodPayloadSinFoto.foto;
             const _bodyStr = JSON.stringify(prodPayloadSinFoto);
             const _encoded = encodeURIComponent(_bodyStr);
-            const _urlFinal = 'https://script.google.com/macros/s/AKfycbzDX6PUCDQwcFWryy3Atp3gb8JNrjYiEPHKrETbSnbjNiHr5dWhu_w-ji5g0bYMHPpG/exec?data=' + _encoded;
+            const _urlFinal = 'https://script.google.com/macros/s/AKfycbzFYO2Md3SDxZlbI4zyW2ZwNWOYpo38B0fQxBiJnvjppAQFsyEot0KKMveeyp4O2Kje/exec?data=' + _encoded;
             // Usar no-cors para evitar bloqueo CORS — no devuelve body pero sí ejecuta el script
             fetch(_urlFinal, { method: 'GET', mode: 'no-cors' })
                 .then(() => { mostrarToast('✓ Enviado al Sheet (no-cors)', 'success'); })
