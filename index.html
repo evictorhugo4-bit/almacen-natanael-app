@@ -3219,7 +3219,7 @@ _sheetProductos.forEach(p => {
             const container = document.getElementById('listaProductosCatalogo');
             const filtrados = _sheetProductos
                 .map((p, i) => ({ ...p, _idx: i }))
-                .filter(p => p.stock > 0 && p.nombre.toLowerCase().includes(query.toLowerCase()));
+                .filter(p => (p.stockCalculado ?? parseFloat(p.stock) ?? 0) > 0 && p.nombre.toLowerCase().includes(query.toLowerCase()));
             if (filtrados.length === 0) {
                 container.innerHTML = `<p class="text-[10px] text-slate-500 text-center py-4 font-bold uppercase">Sin resultados</p>`;
                 return;
@@ -3241,7 +3241,7 @@ _sheetProductos.forEach(p => {
                     ${thumb}
                     <div class="flex-1 min-w-0">
                         <span class="block font-black text-white uppercase text-xs truncate">${Utils.escHtml(p.nombre)}</span>
-                        <span class="block text-[9px] text-slate-500 font-bold">Stock: ${p.stock} · ${p.tipoVenta || 'Unidad'}</span>
+                        <span class="block text-[9px] text-slate-500 font-bold">Stock: ${p.stockCalculado ?? p.stock ?? 0} · ${p.tipoVenta || 'Unidad'}</span>
                     </div>
                     <span class="font-mono font-black text-emerald-500 shrink-0">$${Utils.fmt(p.precio)}</span>
                 </button>`;
