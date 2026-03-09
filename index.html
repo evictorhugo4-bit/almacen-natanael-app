@@ -3192,6 +3192,7 @@ _sheetProductos.forEach(p => {
         function cerrarNuevaVenta() { toggleModal('modalVenta', false); }
 
         function abrirSelectorProducto() {
+            recalcularTodosLosStocks();
             document.getElementById('inputBusqueda').value = '';
             filtrarProductos('');
             toggleModal('modalCatalogo', true);
@@ -4964,29 +4965,9 @@ cargarOpcionesProducto();
                 // NO incluir foto en base64 — hace la URL demasiado larga y Google la corta
                 stockComienzo: data.stockInicio
             };
-            // Enviar sin foto para no superar límite de URL de Apps Script
-            const prodPayloadSinFoto = Object.assign({}, prodPayload);
-            delete prodPayloadSinFoto.foto;
-            const _bodyStr = JSON.stringify(prodPayloadSinFoto);
-            const _encoded = encodeURIComponent(_bodyStr);
-            const _urlFinal = 'https://script.google.com/macros/s/AKfycbzFYO2Md3SDxZlbI4zyW2ZwNWOYpo38B0fQxBiJnvjppAQFsyEot0KKMveeyp4O2Kje/exec?data=' + _encoded;
-            fetch(_urlFinal)
-                .then(r => r.text())
-                .then(txt => {
-                    try {
-                        const d = JSON.parse(txt);
-                        if (d.ok) {
-                            mostrarToast('✓ Guardado en Sheet', 'success');
-                        } else {
-                            mostrarToast('✗ Sheet error: ' + (d.error||txt.substring(0,100)), 'error');
-                        }
-                    } catch(e) {
-                        mostrarToast('✗ Respuesta: ' + txt.substring(0,100), 'error');
-                    }
-                })
-                .catch(e => {
-                    mostrarToast('✗ CORS/Red: ' + e.message, 'error');
-                });
+            // Enviar foto via POST real (sin límite de URL)
+            prodPayload.foto = data.foto || '';
+            fetchSheets({ method: 'POST', body: JSON.stringify(prodPayload) });
 
             cerrarEditorProducto();
             renderInventario();
@@ -9764,20 +9745,21 @@ function verDetalleProveedor(tipo, id){
 
         // SINCRONIZACIÓN GOOGLE SHEETS — Tiempo real (30s)
         // ══════════════════════════════════════════════════════
-        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbzFYO2Md3SDxZlbI4zyW2ZwNWOYpo38B0fQxBiJnvjppAQFsyEot0KKMveeyp4O2Kje/exec';
-        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbzFYO2Md3SDxZlbI4zyW2ZwNWOYpo38B0fQxBiJnvjppAQFsyEot0KKMveeyp4O2Kje/exec';
+        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbxHoCKpUCdWdDVCK3N7ZHLZSJh5tQ_XDF6olbqmAc1UDAi0dps2HMSAsSPEj-3FM4ei/exec';
+        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbxHoCKpUCdWdDVCK3N7ZHLZSJh5tQ_XDF6olbqmAc1UDAi0dps2HMSAsSPEj-3FM4ei/exec';
         function fetchSheets(options) {
             if (!options || options.method !== 'POST') {
-                // GET simple para leer datos — con cors normal
                 fetch(SHEETS_URL2).catch(()=>{});
                 return;
             }
             try {
                 const payload = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
-                const encoded = encodeURIComponent(payload);
-                const url = SHEETS_URL2 + '?data=' + encoded;
-                console.log('[Sheet] Enviando → URL length:', url.length);
-                fetch(url)
+                console.log('[Sheet] POST → body length:', payload.length);
+                fetch(SHEETS_URL2, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: payload
+                })
                     .then(r => r.text())
                     .then(txt => {
                         try {
@@ -10244,6 +10226,7 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
             prod.tipoVenta  = tipoVenta || prod.tipoVenta;
             prod.depto      = depto     || prod.depto;
             prod.imagen     = imagen    || prod.imagen;
+            prod.foto       = imagen    || prod.foto || '';
             prod.codigos    = codigos   || prod.codigos;
             prod.vencimiento= vencimiento || prod.vencimiento;
             prod.stockMin   = stockMin;
@@ -10263,6 +10246,7 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
                 depto:       depto,
                 proveedor:   proveedor,
                 imagen:      imagen,
+                foto:        imagen || '',
                 codigos:     codigos,
                 vencimiento: vencimiento,
                 stockMin:    stockMin,
