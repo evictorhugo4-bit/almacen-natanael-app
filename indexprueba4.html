@@ -2827,7 +2827,7 @@ Agregar
                 <div class="flex flex-col gap-1 md:col-span-2">
                     <label class="text-[10px] font-black text-emerald-500 uppercase">Código de Barras</label>
                     <div class="flex gap-2">
-                        <input type="text" id="pCodigo" placeholder="Escanear o escribir..." class="flex-1 font-mono">
+                        <input type="text" id="pCodigo" placeholder="Ej: 7790001234, 7790005678 (separar con coma)" class="flex-1 font-mono" title="Podés ingresar múltiples códigos separados por coma">
                         <button type="button" onclick="abrirScanner('producto')" class="px-3 py-2 bg-emerald-500 text-black rounded-xl font-black text-xs flex items-center gap-1 hover:bg-emerald-400 btn-action shrink-0">
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="12" y1="8" x2="12" y2="16"/></svg>
                             SCAN
@@ -4697,18 +4697,23 @@ function indexarProductos(){
             prodPorNombre.set(p.nombre.toUpperCase(), p);
         }
 
+        // Indexar por 'codigos' (múltiples separados por coma)
         if(p.codigos){
-
             p.codigos.split(',').forEach(c=>{
-
                 const codigo = c.trim();
-
                 if(codigo){
                     prodPorCodigo.set(codigo, p);
+                    productosPorCodigo[codigo] = p; // compatibilidad
                 }
-
             });
-
+        }
+        // Indexar también por 'codigo' singular
+        if(p.codigo){
+            const c = String(p.codigo).trim();
+            if(c){
+                prodPorCodigo.set(c, p);
+                productosPorCodigo[c] = p;
+            }
         }
 
     });
@@ -4839,6 +4844,7 @@ cargarOpcionesProducto();
             const data = {
                 id:               index === '-1' ? Utils.genId() : _sheetProductos[index].id,
                 codigo:           val('pCodigo').trim(),
+                codigos:          val('pCodigo').trim(), // mismo valor, indexarProductos usa 'codigos'
                 nombre:           val('pNombre').trim(),
                 categoria:        val('pCategoria').trim(),
                 depto:            val('pDepto').trim(),
@@ -9314,10 +9320,17 @@ function calcularCajaEsperada() {
         window.onload = () => {
             renderHistorial();
             lucide.createIcons();
-            // Dispatch ready so Firebase module can patch DB.save*
             setTimeout(() => {
                 window.dispatchEvent(new Event('natanael-ready'));
-                iniciarSyncSheets();
+                const syncPromise = iniciarSyncSheets();
+                // Re-render tras sync por si el primer render fue prematuro
+                Promise.resolve(syncPromise).then(() => {
+                    setTimeout(() => {
+                        if (_sheetVentas && _sheetVentas.length > 0) {
+                            renderHistorialConSheet();
+                        }
+                    }, 500);
+                }).catch(() => {});
             }, 800);
         };
 
@@ -9931,10 +9944,11 @@ function verDetalleProveedor(tipo, id){
         };
 
         function iniciarSyncSheets() {
-            sincronizarSheets(); // sync inicial al cargar
+            const p = sincronizarSheets(); // sync inicial al cargar
             // Sync automático cada 5 minutos (dataset grande)
             if (_syncInterval) clearInterval(_syncInterval);
             _syncInterval = setInterval(() => sincronizarSheets(), 300000);
+            return p; // retornar promise para que window.onload pueda hacer .then()
         }
 
         // Todas las ventas: locales + sheet sin duplicar
@@ -10011,11 +10025,11 @@ function verDetalleProveedor(tipo, id){
                     line.style.color = color;
                     line.textContent = new Date().toLocaleTimeString('es-AR') + ' — ' + msg;
                     panel.prepend(line);
-                    // Max 20 líneas
                     while (panel.children.length > 20) panel.removeChild(panel.lastChild);
                 }
             };
             _log('↺ Iniciando sync...', '#94a3b8');
+            let data;
             try {
                 let res;
                 try {
@@ -10035,7 +10049,6 @@ function verDetalleProveedor(tipo, id){
                 }
                 const text = await res.text();
                 _log('Respuesta: ' + text.substring(0, 80), '#94a3b8');
-                let data;
                 try {
                     data = JSON.parse(text);
                 } catch(parseErr) {
@@ -10045,89 +10058,71 @@ function verDetalleProveedor(tipo, id){
                     return;
                 }
                 _log('data.ok=' + data.ok + ' | keys: ' + Object.keys(data).join(', '), data.ok ? '#10b981' : '#fbbf24');
-                if (Array.isArray(data.inventario)) _log('inventario: ' + data.inventario.length + ' filas', '#94a3b8');
-                if (Array.isArray(data.ventas))     _log('ventas: '     + data.ventas.length     + ' filas', '#94a3b8');
-                if (Array.isArray(data.compras))    _log('compras: '    + data.compras.length    + ' filas', '#94a3b8');
-                if (Array.isArray(data.pagoVentas))      _log('pagoVentas: '      + data.pagoVentas.length      + ' filas', '#94a3b8');
-                if (Array.isArray(data.egresosNegocio))   _log('egresosNegocio: '   + data.egresosNegocio.length   + ' filas | cols: ' + (data.egresosNegocio[0]?Object.keys(data.egresosNegocio[0]).join(','):''), '#f97316');
-                if (Array.isArray(data.pagoEgresosNegocio)) _log('pagoEgresosNeg: ' + data.pagoEgresosNegocio.length + ' filas | cols: ' + (data.pagoEgresosNegocio[0]?Object.keys(data.pagoEgresosNegocio[0]).join(','):''), '#f97316');
-                if (!Array.isArray(data.egresosNegocio))  _log('⚠ egresosNegocio NO viene del sheet', '#ef4444');
+                if (Array.isArray(data.inventario))          _log('inventario: ' + data.inventario.length + ' filas', '#94a3b8');
+                if (Array.isArray(data.ventas))              _log('ventas: ' + data.ventas.length + ' filas', '#94a3b8');
+                if (Array.isArray(data.compras))             _log('compras: ' + data.compras.length + ' filas', '#94a3b8');
+                if (Array.isArray(data.pagoVentas))          _log('pagoVentas: ' + data.pagoVentas.length + ' filas', '#94a3b8');
+                if (Array.isArray(data.egresosNegocio))      _log('egresosNegocio: ' + data.egresosNegocio.length + ' filas | cols: ' + (data.egresosNegocio[0] ? Object.keys(data.egresosNegocio[0]).join(',') : ''), '#f97316');
+                if (Array.isArray(data.pagoEgresosNegocio))  _log('pagoEgresosNeg: ' + data.pagoEgresosNegocio.length + ' filas | cols: ' + (data.pagoEgresosNegocio[0] ? Object.keys(data.pagoEgresosNegocio[0]).join(',') : ''), '#f97316');
+                if (!Array.isArray(data.egresosNegocio))     _log('⚠ egresosNegocio NO viene del sheet', '#ef4444');
                 if (!Array.isArray(data.pagoEgresosNegocio)) _log('⚠ pagoEgresosNegocio NO viene del sheet', '#ef4444');
-                if (Array.isArray(data.gastos))     _log('gastos: '     + data.gastos.length     + ' filas', '#10b981');
-                if (Array.isArray(data.ingresos))   _log('ingresos: '   + data.ingresos.length   + ' filas', '#10b981');
-                if (Array.isArray(data.egresos))    _log('egresos (alt): ' + data.egresos.length  + ' filas', '#fbbf24');
-                // Normalizar: aceptar data.egresos como alternativa a data.gastos
-                if (!data.gastos && data.egresos)   data.gastos = data.egresos;
-                if (!data.gastos && data.GASTOS)    data.gastos = data.GASTOS;
+                if (Array.isArray(data.gastos))              _log('gastos: ' + data.gastos.length + ' filas', '#10b981');
+                if (Array.isArray(data.ingresos))            _log('ingresos: ' + data.ingresos.length + ' filas', '#10b981');
+                if (Array.isArray(data.egresos))             _log('egresos (alt): ' + data.egresos.length + ' filas', '#fbbf24');
+                if (!data.gastos && data.egresos)    data.gastos   = data.egresos;
+                if (!data.gastos && data.GASTOS)     data.gastos   = data.GASTOS;
                 if (!data.ingresos && data.INGRESOS) data.ingresos = data.INGRESOS;
                 if (!data.ok) {
                     _log('❌ data.ok es false — el script no retorna ok:true', '#f87171');
                     return;
                 }
-
-                // Procesar ventas del Sheet
-                // Agrupar por Fecha+Cliente+PagoTotal+índice para no perder ventas similares
+                // ── Procesar VENTAS ──
                 if (Array.isArray(data.ventas)) {
-_sheetVentas = [];
+                    _sheetVentas = [];
                     const ventasMap = {};
-                    data.ventas.forEach((row, rowIdx) => {
-                        // Formatear fecha legible desde ISO
-                        let fechaRaw = String(
-                            row['FECHA'] || row['Fecha'] || row['fecha'] ||
-                            row['FECHA CORTA'] || row['Fecha Corta'] || ''
-                        ).trim();
+                    data.ventas.forEach((row) => {
+                        let fechaRaw = String(row['FECHA']||row['Fecha']||row['fecha']||row['FECHA CORTA']||row['Fecha Corta']||'').trim();
                         let fechaDisplay = fechaRaw;
                         try {
-                            if (fechaRaw && (fechaRaw.includes('T') || fechaRaw.includes('-') || fechaRaw.includes('/'))) {
-                                const d = new Date(fechaRaw.includes('/') ?
-                                    fechaRaw.replace(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/, '$3-$2-$1') : fechaRaw);
+                            if (fechaRaw && (fechaRaw.includes('T')||fechaRaw.includes('-')||fechaRaw.includes('/'))) {
+                                const d = new Date(fechaRaw.includes('/')?fechaRaw.replace(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/,'$3-$2-$1'):fechaRaw);
                                 if (!isNaN(d)) fechaDisplay = String(d.getDate()).padStart(2,'0')+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+d.getFullYear()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');
                             }
                         } catch(e) {}
-
-                        const cliente = String(row['CLIENTE'] || row['Cliente'] || '').trim() || '-';
-                        const total   = parseSheetNum(row['PAGO TOTAL'] || row['Pago Total']);
-                        const idVenta = String(row['IDVENTAS'] || row['IDVENTAS'] || '').trim();
-
-                        // Agrupar por ID_VENTAS si existe, sino por fecha+cliente+total
-                        const key = idVenta || (fechaRaw + '|' + cliente + '|' + total);
-
+                        const cliente = String(row['CLIENTE']||row['Cliente']||'').trim()||'-';
+                        const total   = parseSheetNum(row['PAGO TOTAL']||row['Pago Total']);
+                        const idVenta = String(row['IDVENTAS']||'').trim();
+                        const key     = idVenta||(fechaRaw+'|'+cliente+'|'+total);
                         if (!ventasMap[key]) {
                             ventasMap[key] = {
-                                id:        idVenta || ('sheet_' + key.replace(/[^a-z0-9]/gi,'_').substring(0,50)),
+                                id:        idVenta||('sheet_'+key.replace(/[^a-z0-9]/gi,'_').substring(0,50)),
                                 fecha:     fechaDisplay,
                                 fechaISO:  fechaRaw,
                                 cliente:   cliente,
-                                idCliente: String(row['IDCLIENTE'] || '').trim(),
+                                idCliente: String(row['IDCLIENTE']||'').trim(),
                                 total:     total,
-                                efectivo:  parseSheetNum(row['PAGO EFECTIVO'] || row['Pago Efectivo']),
-                                deuda:     parseSheetNum(row['PAGO CREDITO'] || row['Pago credito'] || row['Pago Credito']),
+                                efectivo:  parseSheetNum(row['PAGO EFECTIVO']||row['Pago Efectivo']),
+                                deuda:     parseSheetNum(row['PAGO CREDITO']||row['Pago credito']||row['Pago Credito']),
                                 fromSheet: true,
-                                items: []
+                                items:     []
                             };
                         }
-
-                        // Cantidad: usar "Cantidad" si existe, sino "Cantidad Introducida"
-                        const rawCant = parseSheetNum(row['CANTIDAD'] || row['Cantidad'] || row['Cantidad Introducida']);
-                        const cantidad = rawCant > 0 ? rawCant : 0;
-
+                        const rawCant = parseSheetNum(row['CANTIDAD']||row['Cantidad']||row['Cantidad Introducida']);
                         ventasMap[key].items.push({
-                            nombre:    String(row['PRODUCTO'] || row['Producto'] || ''),
-                            cantidad:  cantidad,
-                            precio:    parseSheetNum(row['PRECIO DE VENTA'] || row['Precio de Venta']),
-                            tipoVenta: String(row['TIPO DE VENTA'] || row['Tipo de Venta'] || ''),
-                            proveedor: String(row['PROVEEDOR'] || row['Proveedor'] || ''),
-                            categoria: String(row['Categoria'] || ''),
-                            depto:     String(row['Departamento'] || ''),
-                            costo:     parseFloat(row['Precio Costo']) || 0
+                            nombre:    String(row['PRODUCTO']||row['Producto']||''),
+                            cantidad:  rawCant > 0 ? rawCant : 0,
+                            precio:    parseSheetNum(row['PRECIO DE VENTA']||row['Precio de Venta']),
+                            tipoVenta: String(row['TIPO DE VENTA']||row['Tipo de Venta']||''),
+                            proveedor: String(row['PROVEEDOR']||row['Proveedor']||''),
+                            categoria: String(row['Categoria']||''),
+                            depto:     String(row['Departamento']||''),
+                            costo:     parseFloat(row['Precio Costo'])||0
                         });
                     });
-
                     _sheetVentas = Object.values(ventasMap);
                     console.log('✓ Sheet ventas cargadas:', _sheetVentas.length);
                     renderHistorialConSheet();
                 }
-
                 // — Procesar inventario del Sheet —
                 // ── Procesar INVENTARIO del Sheet → POS ──
 if (Array.isArray(data.inventario) && data.inventario.length > 0) {
@@ -10138,7 +10133,8 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
     data.inventario.forEach(row => {
 
         const id = String(
-            row['IDPRODUCTO'] ||
+            row['IDPRODUCTOS'] ||
+            row['IDPRODUCTO']  ||
             row['ID PRODUCTO'] ||
             row['NUMERO PROD'] ||
             row['ID'] ||
@@ -10147,80 +10143,80 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
 
         if (!id) return;
 
-        const nombre = String(row['NOMBRE'] || row['PRODUCTO'] || '').trim();
-
-        const stock  = parseFloat(row['STOCK']) || 0;
-
-        const costo  = parseFloat(
-            row['COSTO'] ||
-            row['PRECIO COSTO'] ||
-            row['PRECIO_DE_COSTO']
-        ) || 0;
-
-        const precio = parseFloat(
-            row['PRECIO'] ||
-            row['PRECIO VENTA'] ||
-            row['PRECIO_DE_VENTA']
-        ) || 0;
+        const nombre    = String(row['NOMBRE'] || row['PRODUCTO'] || '').trim();
+        const stock     = parseFloat(row['STOCK ACTUAL'] || row['STOCK FISICO'] || row['STOCK'] || 0) || 0;
+        const costo     = parseFloat(row['PRECIO DE COSTO'] || row['PRECIO COSTO'] || row['COSTO'] || 0) || 0;
+        const precio    = parseFloat(row['PRECIO DE VENTA'] || row['PRECIO VENTA'] || row['PRECIO'] || 0) || 0;
+        const margen    = parseFloat(row['MARGEN BRUTO'] || 0) || 0;
+        const proveedor = String(row['PROVEEDOR'] || '').trim();
+        const categoria = String(row['CATEGORIA'] || '').trim();
+        const tipoVenta = String(row['FORMA DE VENTA'] || row['TIPO DE VENTA'] || 'Unidad').trim();
+        const depto     = String(row['DEPARTAMENTO'] || '').trim();
+        const imagen    = String(row['IMAGEN'] || '').trim();
+        const codigos   = String(row['CODIGOS'] || '').trim();
+        const vencimiento = String(row['VENCIMIENTO'] || '').trim();
+        const stockMin  = parseFloat(row['STOCK MINIMO X CATEGORIA'] || 0) || 0;
 
         let prod = prodPorId.get(id);
 
         if (prod) {
-
-            // actualizar producto existente
-            prod.stock  = stock || prod.stock;
-            prod.costo  = costo || prod.costo;
-            prod.precio = precio || prod.precio;
-
+            // actualizar producto existente con datos frescos del sheet
+            prod.stock      = stock;
+            prod.costo      = costo     || prod.costo;
+            prod.precio     = precio    || prod.precio;
+            prod.margenBruto= margen    || prod.margenBruto;
+            prod.proveedor  = proveedor || prod.proveedor;
+            prod.categoria  = categoria || prod.categoria;
+            prod.tipoVenta  = tipoVenta || prod.tipoVenta;
+            prod.depto      = depto     || prod.depto;
+            prod.imagen     = imagen    || prod.imagen;
+            prod.codigos    = codigos   || prod.codigos;
+            prod.vencimiento= vencimiento || prod.vencimiento;
+            prod.stockMin   = stockMin;
             actualizados++;
-
         } else {
-
-            // crear producto nuevo
-            _sheetProductos.push({
-                id: id,
-                numeroProd: id,
-                nombre: nombre,
-                stock: stock,
-                costo: costo,
-                precio: precio,
-                margenBruto: 0,
-                categoria: '',
-                tipoVenta: 'Unidad',
-                depto: '',
-                proveedor: '',
-                fromSheet: true
-            });
-
+            // crear producto nuevo desde sheet
+            const nuevo = {
+                id:          id,
+                numeroProd:  id,
+                nombre:      nombre,
+                stock:       stock,
+                costo:       costo,
+                precio:      precio,
+                margenBruto: margen,
+                categoria:   categoria,
+                tipoVenta:   tipoVenta,
+                depto:       depto,
+                proveedor:   proveedor,
+                imagen:      imagen,
+                codigos:     codigos,
+                vencimiento: vencimiento,
+                stockMin:    stockMin,
+                fromSheet:   true
+            };
+            _sheetProductos.push(nuevo);
             agregados++;
         }
 
     });
 
-if (agregados > 0 || actualizados > 0) {
-
-    indexarProductos();   // ⚡ CREA EL ÍNDICE DE PRODUCTOS
-
-    inventarioFiltrado = [..._sheetProductos];
-
-    const vistaInv = document.getElementById('vistaInventario');
-
-    if (vistaInv && !vistaInv.classList.contains('hidden')) {
-        renderInventario();
+    if (agregados > 0 || actualizados > 0) {
+        indexarProductos();
+        inventarioFiltrado = [..._sheetProductos];
+        console.log('✓ Inventario Sheet: ' + agregados + ' nuevos, ' + actualizados + ' actualizados');
+        revisarVencimientos();
+        // Siempre renderizar, esté visible o no la vista
+        setTimeout(() => {
+            inventarioFiltrado = [..._sheetProductos];
+            const vistaInv = document.getElementById('vistaInventario');
+            if (vistaInv && !vistaInv.classList.contains('hidden')) {
+                renderInventario();
+            }
+        }, 300);
     }
 
-    console.log('✓ Inventario Sheet: ' + agregados + ' nuevos, ' + actualizados + ' actualizados');
-
-    revisarVencimientos();
-
-}
-
-    } else {
-
-        console.log('Inventario: sin cambios (' + data.inventario.length + ' filas procesadas)');
-
-    }
-
+} else {
+    console.log('Inventario: sin cambios (' + data.inventario.length + ' filas procesadas)');
 }
 
                                 // — Procesar clientes del Sheet —
@@ -10366,9 +10362,7 @@ window._pagoVentasSheet = _pagoVentasSheet;
 
                     const comprasSheet = Object.values(comprasMap);
 
-_sheetCompras = comprasSheet;
 
-console.log('✓ Compras Sheet cargadas:', _sheetCompras.length);
 
 _sheetCompras = comprasSheet;
 
@@ -10558,7 +10552,7 @@ console.log('Generos cargados:', _generosEgrSheet);
                     Object.keys(catsMap).forEach(k => { catsRef[k] = [...catsMap[k]].sort(); });
                     let ag=0, ac=0;
                     rows.forEach(row => {
-                        let fechaRaw = String(row['FECHA']||row['Fecha']||row['Fecha...'+'']||'').trim();
+                        let fechaRaw = String(row['FECHA']||row['Fecha']||row['Fecha...']||'').trim();
                         let fechaDisplay = fechaRaw;
                         try { if (fechaRaw&&(fechaRaw.includes('T')||fechaRaw.includes('-'))) { const d=new Date(fechaRaw); if(!isNaN(d)) fechaDisplay=d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}); } } catch(e){}
                         const idRow = String(row['IDINGRESOSNEGOCIO']||row['IDEGRESOSNEGOCIO']||row['NUMERO DE INGRESOS NEGOCIO']||row['NUMERO DE EGRESOS']||row['ID_INGRESOS']||row['Id_Gastos']||'').trim();
@@ -10586,7 +10580,7 @@ console.log('Generos cargados:', _generosEgrSheet);
                     }
                 };
                 syncIngEgrNeg(data.ingresosNegocio, _sheetIngresosNegocio, saveIngresosNeg, 'ingresosNegocio', _supercatsIngNegSheet, _catsIngNegSheet);
-                syncIngEgrNeg(data.egresosNegocio,  _sheetEgresosNegocio,  saveEgresosNeg,  'egresosNegocio',  _supercatsEgrNegSheet, _catsEgrNegSheet, _generosEgrNegSheet);
+                syncIngEgrNeg(data.egresosNegocio,  _sheetEgresosNegocio,  saveEgresosNeg,  'egresosNegocio',  _supercatsEgrNegSheet, _catsEgrNegSheet);
                 if (Array.isArray(data.pagoEgresosNegocio) && data.pagoEgresosNegocio.length > 0) {
                     _pagoEgrNegSheet = data.pagoEgresosNegocio.map(row => ({
                         id:          String(row['IDPAGOEGRESOSNEGOCIO'] || '').trim(),
@@ -10599,34 +10593,25 @@ console.log('Generos cargados:', _generosEgrSheet);
                     })).filter(p => p.monto > 0);
                     console.log('[Sync] _pagoEgrNegSheet cargados:', _pagoEgrNegSheet.length);
                 }
-                syncProveedoresDesdeSheet(
-    data.proveedoresNegocio,
-    proveedoresNegocioDB,
-    saveProveedoresNeg,
-    'negocio'
-);
+                syncProveedoresDesdeSheet(data.proveedoresNegocio, 'negocio');
+syncProveedoresDesdeSheet(data.proveedoresGastos, 'gastos');
 
-syncProveedoresDesdeSheet(
-    data.proveedoresGastos,
-    proveedoresGastosDB,
-    saveProveedoresGast,
-    'gastos'
-);
+// Si el modal de detalle cliente está abierto, refrescarlo
+if (clienteDetalleId) {
+    const _modalDet = document.getElementById('modalDetalleCliente');
+    if (_modalDet && !_modalDet.classList.contains('hidden')) {
+        abrirDetalleCliente(clienteDetalleId);
+    }
+}
 
-                // Si el modal de detalle cliente está abierto, refrescarlo con datos del sheet
-                if (clienteDetalleId) {
-                    const _modalDet = document.getElementById('modalDetalleCliente');
-                    if (_modalDet && !_modalDet.classList.contains('hidden')) {
-                        abrirDetalleCliente(clienteDetalleId);
-                    }
-                }
-                // Re-renderizar lista de clientes para actualizar deudas/préstamos
-                const _vistaClientes = document.getElementById('vistaClientes');
-                if (_vistaClientes && !_vistaClientes.classList.contains('hidden')) {
-                    renderClientes();
-                }
+// Re-renderizar clientes
+const _vistaClientes = document.getElementById('vistaClientes');
+if (_vistaClientes && !_vistaClientes.classList.contains('hidden')) {
+    renderClientes();
+}
 
-                if (indicator) indicator.classList.remove('hidden');
+if (indicator) indicator.classList.remove('hidden');
+
             } catch(e) {
                 console.error('Sync Sheets error:', e);
                 const panel = document.getElementById('syncDebugPanel');
@@ -10637,15 +10622,12 @@ syncProveedoresDesdeSheet(
                     panel.prepend(line);
                 }
                 if (indicator) indicator.classList.add('hidden');
-                
-                // Verificar si pagos fueron cargados correctamente
-                setTimeout(() => {
-                    if (!_pagoVentasSheet || _pagoVentasSheet.length === 0) {
-                        _log('⚠ ADVERTENCIA: No hay pagoVentas en la respuesta del Apps Script', '#fbbf24');
-                        _log('Ejecuta en consola: diagnosticoPagos() para ver detalles', '#fbbf24');
-                    }
-                }, 1500);
             }
+            setTimeout(() => {
+                if (!_pagoVentasSheet || _pagoVentasSheet.length === 0) {
+                    console.warn('⚠ ADVERTENCIA: No hay pagoVentas en la respuesta del Apps Script');
+                }
+            }, 1500);
         }
 
         function renderHistorialConSheet() {
@@ -11367,33 +11349,16 @@ console.log("FILTRADAS:", filtradas.length);
         let _scanInterval = null;
         let _barcodeDetector = null;
 
-        async function abrirScanner(){
-
-const modal = document.getElementById("modalScanner");
-modal.style.display = "flex";
-
-const video = document.getElementById("scanVideo");
-
-try{
-
-if(video.srcObject){
-video.srcObject.getTracks().forEach(t => t.stop());
-}
-
-const stream = await navigator.mediaDevices.getUserMedia({
-video:{ facingMode:"environment" }
-});
-
-video.srcObject = stream;
-
-}catch(e){
-
-console.error("Error cámara:", e);
-mostrarToast("No se pudo acceder a la cámara");
-
-}
-
-}
+        async function abrirScanner(modo){
+            _scanModo = modo || _scanModo || 'venta';
+            const modal = document.getElementById("modalScanner");
+            modal.style.display = "flex";
+            // limpiar estado anterior
+            document.getElementById('scanResultado').classList.add('hidden');
+            document.getElementById('scanNoEncontrado').classList.add('hidden');
+            document.getElementById('scanInputManual').value = '';
+            await _iniciarCamara();
+        }
         function _mostrarManual(msg) {
             document.getElementById('scanCamArea').style.display = 'none';
             const st = document.getElementById('scanStatus');
@@ -11439,16 +11404,15 @@ mostrarToast("No se pudo acceder a la cámara");
             document.getElementById('scanResultado').classList.add('hidden');
             document.getElementById('scanNoEncontrado').classList.add('hidden');
 
-            const prod = productosPorCodigo[codigo];
-
-    const lista = (p.codigos || '')
-        .split(',')
-        .map(c => c.trim())
-        .filter(c => c !== '');
-
-    return lista.includes(codigo);
-
-});
+            // Buscar por código exacto en el índice (Map)
+            let prod = prodPorCodigo.get(codigo);
+            // Si no encontró, buscar también en campo 'codigo' singular
+            if (!prod) {
+                prod = _sheetProductos.find(p =>
+                    String(p.codigo || '').trim() === codigo ||
+                    String(p.codigos || '').split(',').map(c=>c.trim()).includes(codigo)
+                );
+            }
            
 
 
@@ -11475,7 +11439,8 @@ mostrarToast("No se pudo acceder a la cámara");
                     }
                 }, 500);
             } else {
-                document.getElementById('scanCodigoLeido').textContent = 'Código leído: ' + codigo;
+                const elCod = document.getElementById('scanNoEncontradoCodigo');
+                if (elCod) elCod.textContent = 'Código: ' + codigo;
                 document.getElementById('scanNoEncontrado').classList.remove('hidden');
                 if (_scanModo === 'producto') {
                     setTimeout(() => {
@@ -11546,14 +11511,15 @@ if (!FIREBASE_URL) {
     // LISTEN realtime
     const keys = ['historial','inventario','clientes','compras'];
 
-    keys.forEach(key => {
+keys.forEach(key => {
 
-       onValue(ref(db, 'natanael/' + key), snap => {
+    onValue(ref(db, 'natanael/' + key), snap => {
 
-    try {
+        try {
 
-        if (!snap.exists()) return;
-        const data = snap.val();
+            if (!snap.exists()) return;
+
+            const data = snap.val();
 
             if (key === 'historial') {
 
@@ -11581,43 +11547,41 @@ if (!FIREBASE_URL) {
 
             }
 
-        });
+            if (key === 'clientes') {
+
+                window.clientesDB = data;
+
+                if (
+                    typeof renderClientes === 'function' &&
+                    !document.getElementById('vistaClientes').classList.contains('hidden')
+                ) {
+                    renderClientes();
+                }
+
+            }
+
+            if (key === 'compras') {
+
+                window._sheetCompras = data;
+
+                if (
+                    typeof renderCompras === 'function' &&
+                    !document.getElementById('vistaCompras').classList.contains('hidden')
+                ) {
+                    renderCompras();
+                }
+
+            }
+
+        } catch(e) {
+
+            console.error('Firebase sync error:', key, e);
+
+        }
 
     });
 
-}
-
-
-
-
-
-                        if (key === 'inventario') {
-                            const local = JSON.parse(localStorage.getItem('natanael_inventario_v1') || '[]');
-                            if (JSON.stringify(local) !== JSON.stringify(data)) {
-                                localStorage.setItem('natanael_inventario_v1', JSON.stringify(data));
-                                window._sheetProductos = data;
-                                if (typeof renderInventario === 'function' && !document.getElementById('vistaInventario').classList.contains('hidden')) renderInventario();
-                            }
-                        }
-                        if (key === 'clientes') {
-                            const local = JSON.parse(localStorage.getItem('natanael_clientes_v1') || '[]');
-                            if (JSON.stringify(local) !== JSON.stringify(data)) {
-                                localStorage.setItem('natanael_clientes_v1', JSON.stringify(data));
-                                window.clientesDB = data;
-                                if (typeof renderClientes === 'function' && !document.getElementById('vistaClientes').classList.contains('hidden')) renderClientes();
-                            }
-                        }
-                        if (key === 'compras') {
-                            const local = JSON.parse(localStorage.getItem('natanael_compras_v1') || '[]');
-                            if (JSON.stringify(local) !== JSON.stringify(data)) {
-                                localStorage.setItem('natanael_compras_v1', JSON.stringify(data));
-                                window._sheetCompras = data;
-                                if (typeof renderCompras === 'function' && !document.getElementById('vistaCompras').classList.contains('hidden')) renderCompras();
-                            }
-                        }
-                    } catch(e) { console.error('sync error', key, e); }
-                });
-            });
+});
 
             // Patch DB.save* to also push to Firebase
             
@@ -11911,15 +11875,11 @@ function setFiltroCompra(filtro) {
         if (e.key === 'Escape') cerrarModalPrecioVenta();
     });
 
-window.onload = function () {
-
+// modales ocultos al cargar — fusionado con window.onload principal arriba
+document.addEventListener('DOMContentLoaded', function () {
     const modales = document.querySelectorAll('.modal-overlay');
-
-    modales.forEach(m => {
-        m.style.display = "none";
-    });
-
-};
+    modales.forEach(m => { m.style.display = "none"; });
+});
 
 
 
@@ -11950,13 +11910,37 @@ justify-content:center;
 z-index:999999999;
 ">
 
-<div class="glass-card">
+<div style="background:#0f172a;border:1px solid #1e293b;border-radius:1.5rem;padding:1.25rem;width:92vw;max-width:420px;display:flex;flex-direction:column;gap:10px;">
 
-<div id="scanCamArea" style="display:block;">
-<video id="scanVideo" autoplay playsinline muted style="width:100%;"></video> style="width:100%;"></video>
-</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <span style="font-size:11px;font-weight:900;color:#10b981;text-transform:uppercase;letter-spacing:.08em;">📷 Escaner</span>
+    <button onclick="cerrarScanner()" style="background:#1e293b;border:none;color:#94a3b8;border-radius:8px;padding:4px 10px;font-weight:900;font-size:12px;cursor:pointer;">✕ Cerrar</button>
+  </div>
 
-<button onclick="cerrarScanner()">Cerrar</button>
+  <div id="scanCamArea" style="display:block;">
+    <video id="scanVideo" autoplay playsinline muted style="width:100%;max-height:55vw;object-fit:cover;border-radius:10px;background:#000;"></video>
+  </div>
+
+  <div id="scanStatus" class="hidden" style="font-size:11px;color:#fbbf24;font-weight:700;text-align:center;padding:8px;background:#1e293b;border-radius:8px;"></div>
+
+  <div style="display:flex;gap:6px;">
+    <input id="scanInputManual" type="text" placeholder="Ingresá código manualmente..."
+      style="flex:1;background:#1e293b;border:1px solid #334155;color:#e2e8f0;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:700;outline:none;"
+      onkeydown="if(event.key==='Enter') procesarCodigo(this.value)" />
+    <button onclick="procesarCodigo(document.getElementById('scanInputManual').value)"
+      style="background:#10b981;color:#000;border:none;border-radius:8px;padding:8px 14px;font-weight:900;font-size:12px;cursor:pointer;">OK</button>
+  </div>
+
+  <div id="scanResultado" class="hidden" style="background:#064e3b;border:1px solid #065f46;border-radius:10px;padding:10px;">
+    <div style="font-size:10px;color:#34d399;font-weight:900;text-transform:uppercase;margin-bottom:4px;">✓ Producto encontrado</div>
+    <div id="scanProdNombre" style="font-size:13px;color:#fff;font-weight:900;"></div>
+    <div id="scanProdPrecio" style="font-size:12px;color:#10b981;font-weight:700;margin-top:2px;"></div>
+  </div>
+
+  <div id="scanNoEncontrado" class="hidden" style="background:#7f1d1d44;border:1px solid #f8717144;border-radius:10px;padding:10px;">
+    <div style="font-size:11px;color:#f87171;font-weight:900;text-transform:uppercase;">✗ Código no encontrado</div>
+    <div id="scanNoEncontradoCodigo" style="font-size:11px;color:#94a3b8;font-weight:700;margin-top:2px;"></div>
+  </div>
 
 </div>
 
