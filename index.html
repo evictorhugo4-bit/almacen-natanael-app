@@ -3229,9 +3229,7 @@ _sheetProductos.forEach(p => {
             container.innerHTML = filtrados.map(p => {
                 const initials = p.nombre.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
                 const color    = colors[p.nombre.charCodeAt(0) % colors.length];
-                const fotoUrl  = p.foto && p.foto.includes('drive.google.com')
-                    ? (() => { const m = p.foto.match(/\/d\/([\w-]{25,})|id=([\w-]{25,})/); return m ? 'https://drive.google.com/uc?export=view&id=' + (m[1]||m[2]) : p.foto; })()
-                    : (p.foto || '');
+                const fotoUrl  = p.foto ? driveUrl(p.foto) : '';
                 const thumb    = fotoUrl
                     ? `<img src="${fotoUrl}" class="w-10 h-10 object-contain rounded-lg" alt="">`
                     : `<div class="w-10 h-10 rounded-lg flex items-center justify-center text-xs font-black shrink-0"
@@ -3302,7 +3300,7 @@ _sheetProductos.forEach(p => {
             const fotoEl = document.getElementById('selectorFoto');
             const fotoPlaceholder = document.getElementById('selectorFotoPlaceholder');
             if (prod.foto) {
-                fotoEl.src = prod.foto;
+                fotoEl.src = driveUrl(prod.foto);
                 fotoEl.classList.remove('hidden');
                 fotoPlaceholder.classList.add('hidden');
             } else {
@@ -3480,6 +3478,16 @@ _sheetProductos.forEach(p => {
                 if (dlg) dlg.showModal();
             }
         };
+
+        // Convierte cualquier URL de Drive al formato thumbnail (funciona en móvil y desktop)
+        function driveUrl(url) {
+            if (!url) return '';
+            if (!url.includes('drive.google.com')) return url; // base64 u otra URL
+            const m = url.match(/\/d\/([\w-]{25,})/) || url.match(/[?&]id=([\w-]{25,})/);
+            if (!m) return url;
+            const id = m[1] || m[2];
+            return 'https://lh3.googleusercontent.com/d/' + id + '=w400';
+        }
 
         function comprimirFotoParaSheet(dataUrl, callback) {
             try {
@@ -6821,7 +6829,7 @@ function filtrarProductosCompra(query) {
     const ph = document.getElementById('selectorCompraFotoPlaceholder');
 
     if (prod.foto) {
-        fotoEl.src = prod.foto;
+        fotoEl.src = driveUrl(prod.foto);
         fotoEl.classList.remove('hidden');
         ph.classList.add('hidden');
     } else {
@@ -9789,8 +9797,8 @@ function verDetalleProveedor(tipo, id){
 
         // SINCRONIZACIÓN GOOGLE SHEETS — Tiempo real (30s)
         // ══════════════════════════════════════════════════════
-        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbwNEYbfufvoB_6VKj9gmqvqtqw8thbU173sXJuCWPyYfakJDKvsxNBfXGWyifP802rk/exec';
-        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbwNEYbfufvoB_6VKj9gmqvqtqw8thbU173sXJuCWPyYfakJDKvsxNBfXGWyifP802rk/exec';
+        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbxo7NeJ5UfkfVdB1ryIfMPP43iXSCHhY4cAo665NHPbZp8EB3xmW-C7LMQqCbs7jgXS/exec';
+        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbxo7NeJ5UfkfVdB1ryIfMPP43iXSCHhY4cAo665NHPbZp8EB3xmW-C7LMQqCbs7jgXS/exec';
         function fetchSheets(options) {
             if (!options || options.method !== 'POST') {
                 fetch(SHEETS_URL2).catch(()=>{});
