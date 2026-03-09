@@ -3455,13 +3455,13 @@ _sheetProductos.forEach(p => {
         function eliminarDelCarrito(itemId) {
             carrito = carrito.filter(c => String(c.itemId) !== String(itemId));
             renderCarrito();
+        }
 
         function cambiarCantidadCarrito(itemId, delta) {
             const item = carrito.find(c => String(c.itemId) === String(itemId));
             if (!item) return;
             item.cantidad = Math.max(1, (item.cantidad || 1) + delta);
             renderCarrito();
-        }
         }
 
         function precioItem(item) {
