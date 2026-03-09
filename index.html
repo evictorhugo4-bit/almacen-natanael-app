@@ -4753,7 +4753,7 @@ cargarOpcionesProducto();
             if (index !== -1) {
                 const p = _sheetProductos[index];
                 const setVal = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
-                setVal('pCodigo',           p.codigo || '');
+                setVal('pCodigo',           p.codigos || p.codigo || '');
                 setVal('pNombre',           p.nombre);
                 setVal('pCategoria',        p.categoria);
                 setVal('pDepto',            p.depto);
@@ -4846,7 +4846,7 @@ cargarOpcionesProducto();
             const data = {
                 id:               index === '-1' ? Utils.genId() : (_sheetProductos[index].id || _sheetProductos[index].IDPRODUCTOS || _sheetProductos[index].numeroProd || Utils.genId()),
                 codigo:           val('pCodigo').trim(),
-                codigos:          val('pCodigo').trim(), // mismo valor, indexarProductos usa 'codigos'
+                codigos:          val('pCodigo').trim(),
                 nombre:           val('pNombre').trim(),
                 categoria:        val('pCategoria').trim(),
                 depto:            val('pDepto').trim(),
@@ -4915,6 +4915,7 @@ cargarOpcionesProducto();
                 precioVenta: data.precio,
                 ganancia: ganancia,
                 codigos: data.codigos || data.codigo || '',
+                codigo:  data.codigos || data.codigo || '',
                 // NO incluir foto en base64 — hace la URL demasiado larga y Google la corta
                 stockComienzo: data.stockInicio
             };
