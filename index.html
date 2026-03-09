@@ -3481,6 +3481,31 @@ _sheetProductos.forEach(p => {
             }
         };
 
+        function comprimirFotoParaSheet(dataUrl, callback) {
+            try {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const MAX = 400; // max 400px en cualquier lado
+                    let w = img.width, h = img.height;
+                    if (w > MAX || h > MAX) {
+                        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+                        else       { w = Math.round(w * MAX / h); h = MAX; }
+                    }
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    // Calidad 0.6 para mantener bajo 150KB
+                    const compressed = canvas.toDataURL('image/jpeg', 0.6);
+                    console.log('[Foto] Original:', Math.round(dataUrl.length/1024)+'KB → Comprimida:', Math.round(compressed.length/1024)+'KB');
+                    callback(compressed);
+                };
+                img.onerror = function() { callback(dataUrl); };
+                img.src = dataUrl;
+            } catch(e) {
+                callback(dataUrl);
+            }
+        }
+
         window.buscarProductoPorCodigoEdit = function(codigo) {
             codigo = (codigo || '').trim();
             if (!codigo) return;
@@ -4914,11 +4939,15 @@ cargarOpcionesProducto();
                 fechaVencimiento: val('pFechaVencimiento'),
                 foto: (() => {
                     const imgEl = document.getElementById('fotoPreviewImg');
-                    // If a new file was selected, use its base64 src
+                    // Nueva foto en base64 → usar esa
                     if (!imgEl.classList.contains('hidden') && imgEl.src && imgEl.src.startsWith('data:')) {
                         return imgEl.src;
                     }
-                    // If editing and no new file, keep existing foto
+                    // URL de Drive existente en el img → conservarla
+                    if (!imgEl.classList.contains('hidden') && imgEl.src && imgEl.src.includes('drive.google.com')) {
+                        return imgEl.src;
+                    }
+                    // Editando → conservar foto existente del producto
                     if (index !== '-1' && _sheetProductos[index]?.foto) {
                         return _sheetProductos[index].foto;
                     }
@@ -4965,9 +4994,24 @@ cargarOpcionesProducto();
                 // NO incluir foto en base64 — hace la URL demasiado larga y Google la corta
                 stockComienzo: data.stockInicio
             };
-            // Enviar foto via POST real (sin límite de URL)
-            prodPayload.foto = data.foto || '';
-            fetchSheets({ method: 'POST', body: JSON.stringify(prodPayload) });
+            const fotoOriginal = data.foto || '';
+            if (fotoOriginal && fotoOriginal.startsWith('data:')) {
+                // Base64 nuevo → comprimir antes de enviar al Apps Script (que lo sube a Drive)
+                comprimirFotoParaSheet(fotoOriginal, function(fotoComprimida) {
+                    prodPayload.foto   = fotoComprimida;
+                    prodPayload.imagen = fotoComprimida;
+                    console.log('[Foto] Enviando base64 comprimido al script:', Math.round(fotoComprimida.length/1024)+'KB');
+                    fetchSheets({ method: 'POST', body: JSON.stringify(prodPayload) });
+                });
+            } else if (fotoOriginal && fotoOriginal.includes('drive.google.com')) {
+                // Ya es URL de Drive → enviar directo sin resubir
+                prodPayload.foto   = fotoOriginal;
+                prodPayload.imagen = fotoOriginal;
+                fetchSheets({ method: 'POST', body: JSON.stringify(prodPayload) });
+            } else {
+                // Sin foto → enviar sin campo imagen (no pisar URL existente en sheet)
+                fetchSheets({ method: 'POST', body: JSON.stringify(prodPayload) });
+            }
 
             cerrarEditorProducto();
             renderInventario();
@@ -9745,8 +9789,8 @@ function verDetalleProveedor(tipo, id){
 
         // SINCRONIZACIÓN GOOGLE SHEETS — Tiempo real (30s)
         // ══════════════════════════════════════════════════════
-        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbxHoCKpUCdWdDVCK3N7ZHLZSJh5tQ_XDF6olbqmAc1UDAi0dps2HMSAsSPEj-3FM4ei/exec';
-        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbxHoCKpUCdWdDVCK3N7ZHLZSJh5tQ_XDF6olbqmAc1UDAi0dps2HMSAsSPEj-3FM4ei/exec';
+        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbwNEYbfufvoB_6VKj9gmqvqtqw8thbU173sXJuCWPyYfakJDKvsxNBfXGWyifP802rk/exec';
+        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbwNEYbfufvoB_6VKj9gmqvqtqw8thbU173sXJuCWPyYfakJDKvsxNBfXGWyifP802rk/exec';
         function fetchSheets(options) {
             if (!options || options.method !== 'POST') {
                 fetch(SHEETS_URL2).catch(()=>{});
