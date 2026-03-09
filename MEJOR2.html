@@ -4911,11 +4911,13 @@ cargarOpcionesProducto();
                 costo: data.costo,
                 precioVenta: data.precio,
                 ganancia: ganancia,
-                foto: (() => { const img = document.getElementById('fotoPreviewImg'); return (!img.classList.contains('hidden') && img.src.startsWith('data:')) ? img.src : (_sheetProductos.find(p=>p.id===data.id)||{}).foto||''; })(),
+                // NO incluir foto en base64 — hace la URL demasiado larga y Google la corta
                 stockComienzo: data.stockInicio
             };
-            console.log('📤 PAYLOAD PRODUCTO → SHEETS:', JSON.stringify(prodPayload));
-            fetchSheets({method:'POST', body:JSON.stringify(prodPayload)});
+            // Enviar sin foto para no superar límite de URL de Apps Script
+            const prodPayloadSinFoto = Object.assign({}, prodPayload);
+            delete prodPayloadSinFoto.foto;
+            fetchSheets({method:'POST', body:JSON.stringify(prodPayloadSinFoto)});
 
             cerrarEditorProducto();
             renderInventario();
