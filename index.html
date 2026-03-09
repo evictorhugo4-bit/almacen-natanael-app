@@ -3457,6 +3457,29 @@ _sheetProductos.forEach(p => {
             renderCarrito();
         }
 
+        window.abrirScannerDesdeEditar = function() {
+            // Cerrar el dialog antes de abrir scanner (dialog está en top layer y tapa todo)
+            const dlg = document.getElementById('modalEditarPrecios');
+            if (dlg) dlg.close();
+            _scanModo = 'editar_precio';
+            abrirScanner('editar_precio');
+        };
+
+        // Sobreescribir cerrarScanner para reabrir el dialog si venía de editar_precio
+        const _cerrarScannerOriginal = cerrarScanner;
+        window.cerrarScanner = function() {
+            const modoAntes = _scanModo;
+            _pararScan();
+            document.getElementById('modalScanner').style.display = 'none';
+            document.body.style.overflow = '';
+            const dbg = document.getElementById('_scanDebug');
+            if (dbg) dbg.style.display = 'none';
+            if (modoAntes === 'editar_precio') {
+                const dlg = document.getElementById('modalEditarPrecios');
+                if (dlg) dlg.showModal();
+            }
+        };
+
         window.buscarProductoPorCodigoEdit = function(codigo) {
             codigo = (codigo || '').trim();
             if (!codigo) return;
@@ -11601,12 +11624,17 @@ console.log("FILTRADAS:", filtradas.length);
         }
 
         function cerrarScanner() {
+            const modoAntes = _scanModo;
             _pararScan();
             document.getElementById('modalScanner').style.display = 'none';
             document.body.style.overflow = '';
-            // Ocultar también el panel de debug
             const dbg = document.getElementById('_scanDebug');
             if (dbg) dbg.style.display = 'none';
+            // Si venía desde editar precio, reabrir el dialog
+            if (modoAntes === 'editar_precio') {
+                const dlg = document.getElementById('modalEditarPrecios');
+                if (dlg) dlg.showModal();
+            }
         }
 
         function procesarCodigo(codigo) {
@@ -11863,7 +11891,7 @@ Object.entries(d).forEach(([k,v])=>{
             <input id="editCodigoInput" type="text" placeholder="Escanear o ingresar código..."
                    style="flex:1;padding:10px;background:#0f172a;color:#e2e8f0;border:2px solid #334155;border-radius:8px;font-weight:bold;font-size:13px;box-sizing:border-box;"
                    onkeydown="if(event.key==='Enter'){ buscarProductoPorCodigoEdit(this.value); }">
-            <button onclick="abrirScanner('editar_precio')"
+            <button onclick="abrirScannerDesdeEditar()"
                     style="background:#334155;border:none;color:#10b981;border-radius:8px;padding:10px 14px;font-size:18px;cursor:pointer;">📷</button>
         </div>
         <div id="editCodigoNombre" style="font-size:11px;color:#10b981;font-weight:700;display:none;padding:4px 0;"></div>
