@@ -9703,26 +9703,53 @@ function verDetalleProveedor(tipo, id){
 
         // SINCRONIZACIÓN GOOGLE SHEETS — Tiempo real (30s)
         // ══════════════════════════════════════════════════════
-        const SHEETS_URL = "https://script.google.com/macros/s/AKfycbzFYO2Md3SDxZlbI4zyW2ZwNWOYpo38B0fQxBiJnvjppAQFsyEot0KKMveeyp4O2Kje/exec";
-const SHEETS_URL2 = "https://script.google.com/macros/s/AKfycbzFYO2Md3SDxZlbI4zyW2ZwNWOYpo38B0fQxBiJnvjppAQFsyEot0KKMveeyp4O2Kje/exec";
+        
 
-        async function fetchSheets(options){
-            try{
+const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbzFYO2Md3SDxZlbI4zyW2ZwNWOYpo38B0fQxBiJnvjppAQFsyEot0KKMveeyp4O2Kje/exec';
 
-// ───────── LEER DATOS ─────────
-if(!options || options.method !== "POST"){
+function fetchSheets(options) {
 
-const r = await fetch(SHEETS_URL + "?t=" + Date.now(),{
-cache:"no-store"
-});
+    // ───── LEER DATOS ─────
+    if (!options || options.method !== 'POST') {
 
-const data = await r.json();
+        return fetch(SHEETS_URL + '?t=' + Date.now(), {
+            cache: "no-store"
+        });
 
-window.SHEET_DATA = data;
+    }
 
-return data;
+    try {
+
+        const payload = typeof options.body === 'string'
+            ? options.body
+            : JSON.stringify(options.body);
+
+        const encoded = encodeURIComponent(payload);
+
+        const url = SHEETS_URL + '?data=' + encoded;
+
+        console.log('[Sheet] Enviando → URL length:', url.length);
+
+        return fetch(url, { method: 'GET' })
+            .then(() => {
+                mostrarToast('✓ Guardado en Sheet', 'success');
+            })
+            .catch(e => {
+                mostrarToast('✗ Sheet falló: ' + e.message, 'error');
+            });
+
+    } catch (e) {
+
+        console.error('[Sheet error]', e);
+
+        mostrarToast('⚠ Error al enviar al Sheet: ' + e.message, 'error');
+
+    }
 
 }
+
+
+
 
 // ───────── GUARDAR DATOS ─────────
 
