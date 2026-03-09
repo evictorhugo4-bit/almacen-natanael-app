@@ -11272,7 +11272,6 @@ console.log("FILTRADAS:", filtradas.length);
                 return;
             }
 
-            // Productos del proveedor
             const productos = _sheetProductos.filter(p =>
                 String(p.proveedor||'').trim().toUpperCase() === proveedor.toUpperCase()
             );
@@ -11283,42 +11282,44 @@ console.log("FILTRADAS:", filtradas.length);
                 return;
             }
 
-            // Calcular compras y ventas por producto
-            const todasV = [...historial, ...(_sheetVentas||[]).filter(v => !historial.some(h=>h.id===v.id))];
-            const todasC = _sheetCompras || [];
-
-            // ventas por nombre de producto
-            const ventasPorNom = {};
-            todasV.forEach(v => {
-                (v.items||[]).forEach(it => {
-                    const nom = String(it.nombre||'').trim().toUpperCase();
-                    ventasPorNom[nom] = (ventasPorNom[nom]||0) + (parseFloat(it.cantidad)||0);
-                });
-                // también del sheet ventas (filas directas)
-            });
-            // ventas del sheet (filas directas sin items)
-            (_sheetVentas||[]).forEach(v => {
-                if (!historial.some(h=>h.id===v.id)) {
-                    const nom = String(v.PRODUCTO||v.producto||'').trim().toUpperCase();
-                    if (nom) ventasPorNom[nom] = (ventasPorNom[nom]||0) + (parseFloat(v.CANTIDAD||v.cantidad)||0);
-                }
-            });
-
-            const comprasPorNom = {};
-            todasC.forEach(c => {
-                const nom = String(c.PRODUCTO||c.producto||'').trim().toUpperCase();
-                if (nom) comprasPorNom[nom] = (comprasPorNom[nom]||0) + (parseFloat(c.CANTIDAD||c.cantidad)||0);
-            });
+            // Misma fuente de datos que el Kardex
+            const todasV = [...historial, ...(_sheetVentas||[]).filter(v=>!historial.some(h=>h.id===v.id))];
+            const cpKey = cp => String(cp.fecha||cp.fechaISO||'').substring(0,16).trim()+'|'+String(cp.proveedor||'').trim()+'|'+String(cp.total||'');
+            const keysLocal = new Set(_sheetCompras.map(cpKey));
+            const todasC = [..._sheetCompras, ...(_sheetCompras||[]).filter(cp=>!_sheetCompras.some(c=>c.id===cp.id)&&!keysLocal.has(cpKey(cp)))];
 
             let totSI=0, totC=0, totV=0, totSA=0;
 
             tbody.innerHTML = productos.map(p => {
-                const nom = String(p.nombre||'').trim().toUpperCase();
+                const nombreUp = String(p.nombre||'').trim().toUpperCase();
                 const stockInicial = parseFloat(p.stockInicio || p.stockComienzo || 0) || 0;
-                const compras      = parseFloat(comprasPorNom[nom]||0);
-                const ventas       = parseFloat(ventasPorNom[nom]||0);
-                // Calcular igual que el Kardex: stockInicial + compras - ventas
-                const stockActual  = stockInicial + compras - ventas;
+                const refNum = parseFechaNum(p.fechaStockInicio || p.fechaVerif || p['FECHA STOCK INICIAL MENSUAL'] || p['FECHA STOCK FISICO'] || '');
+
+                // Ventas desde stockInicio (igual que Kardex: busca en v.items)
+                let ventas = 0;
+                todasV.forEach(v => {
+                    const fnum = parseFechaNum(v.fechaISO || v.fecha || v['FECHA'] || '');
+                    if (!fnum) return;
+                    if (refNum && fnum < refNum) return; // solo posterior al stock inicial
+                    (v.items||[]).forEach(it => {
+                        if (String(it.nombre||'').trim().toUpperCase() !== nombreUp) return;
+                        ventas += parseFloat(it.cantidad)||0;
+                    });
+                });
+
+                // Compras desde stockInicio (igual que Kardex: busca en cp.items)
+                let compras = 0;
+                todasC.forEach(cp => {
+                    const fnum = parseFechaNum(cp.fechaISO || cp.fecha);
+                    if (!fnum) return;
+                    if (refNum && fnum < refNum) return;
+                    (cp.items||[]).forEach(it => {
+                        if (String(it.nombre||'').trim().toUpperCase() !== nombreUp) return;
+                        compras += parseFloat(it.cantidad)||0;
+                    });
+                });
+
+                const stockActual = stockInicial + compras - ventas;
                 totSI += stockInicial; totC += compras; totV += ventas; totSA += stockActual;
                 const saColor = stockActual <= 0 ? 'text-red-400' : stockActual < 5 ? 'text-yellow-400' : 'text-emerald-400';
                 return `<tr class="hover:bg-slate-800/50 border-b border-slate-800">
