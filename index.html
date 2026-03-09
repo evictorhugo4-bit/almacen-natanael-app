@@ -11610,10 +11610,12 @@ console.log("FILTRADAS:", filtradas.length);
                 setTimeout(() => {
                     const idx = _sheetProductos.indexOf(prod);
                     if (_scanModo === 'venta') {
-                        cerrarScanner(); abrirSelectorProducto(); 
-                        // pre-filter by name
-                        const inp = document.getElementById('inputBusqueda');
-                        if (inp) { inp.value = prod.nombre; filtrarProductos(prod.nombre); }
+                        cerrarScanner();
+                        // Buscar índice real en _sheetProductos
+                        const idxVenta = _sheetProductos.findIndex(sp => sp.id && prod.id && sp.id === prod.id) !== -1
+                            ? _sheetProductos.findIndex(sp => sp.id && prod.id && sp.id === prod.id)
+                            : _sheetProductos.indexOf(prod);
+                        seleccionarParaCantidad(idxVenta);
                     } else if (_scanModo === 'compra') {
                         cerrarScanner(); seleccionarProductoCompra(idx);
                     } else if (_scanModo === 'producto') {
