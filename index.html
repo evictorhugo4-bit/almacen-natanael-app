@@ -4920,10 +4920,23 @@ cargarOpcionesProducto();
             const _bodyStr = JSON.stringify(prodPayloadSinFoto);
             const _encoded = encodeURIComponent(_bodyStr);
             const _urlFinal = 'https://script.google.com/macros/s/AKfycbzFYO2Md3SDxZlbI4zyW2ZwNWOYpo38B0fQxBiJnvjppAQFsyEot0KKMveeyp4O2Kje/exec?data=' + _encoded;
-            // Usar no-cors para evitar bloqueo CORS — no devuelve body pero sí ejecuta el script
-            fetch(_urlFinal, { method: 'GET', mode: 'no-cors' })
-                .then(() => { mostrarToast('✓ Enviado al Sheet (no-cors)', 'success'); })
-                .catch(e => { mostrarToast('✗ Error: ' + e.message, 'error'); });
+            fetch(_urlFinal)
+                .then(r => r.text())
+                .then(txt => {
+                    try {
+                        const d = JSON.parse(txt);
+                        if (d.ok) {
+                            mostrarToast('✓ Guardado en Sheet', 'success');
+                        } else {
+                            mostrarToast('✗ Sheet error: ' + (d.error||txt.substring(0,100)), 'error');
+                        }
+                    } catch(e) {
+                        mostrarToast('✗ Respuesta: ' + txt.substring(0,100), 'error');
+                    }
+                })
+                .catch(e => {
+                    mostrarToast('✗ CORS/Red: ' + e.message, 'error');
+                });
 
             cerrarEditorProducto();
             renderInventario();
@@ -9703,78 +9716,41 @@ function verDetalleProveedor(tipo, id){
 
         // SINCRONIZACIÓN GOOGLE SHEETS — Tiempo real (30s)
         // ══════════════════════════════════════════════════════
-        
-
-const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbzFYO2Md3SDxZlbI4zyW2ZwNWOYpo38B0fQxBiJnvjppAQFsyEot0KKMveeyp4O2Kje/exec';
-
-function fetchSheets(options) {
-
-    // ───── LEER DATOS ─────
-    if (!options || options.method !== 'POST') {
-
-        return fetch(SHEETS_URL + '?t=' + Date.now(), {
-            cache: "no-store"
-        });
-
-    }
-
-    try {
-
-        const payload = typeof options.body === 'string'
-            ? options.body
-            : JSON.stringify(options.body);
-
-        const encoded = encodeURIComponent(payload);
-
-        const url = SHEETS_URL + '?data=' + encoded;
-
-        console.log('[Sheet] Enviando → URL length:', url.length);
-
-        return fetch(url, { method: 'GET' })
-            .then(() => {
-                mostrarToast('✓ Guardado en Sheet', 'success');
-            })
-            .catch(e => {
-                mostrarToast('✗ Sheet falló: ' + e.message, 'error');
-            });
-
-    } catch (e) {
-
-        console.error('[Sheet error]', e);
-
-        mostrarToast('⚠ Error al enviar al Sheet: ' + e.message, 'error');
-
-    }
-
-}
-
-
-
-
-// ───────── GUARDAR DATOS ─────────
-
-const payload = typeof options.body === "string"
-? options.body
-: JSON.stringify(options.body);
-
-const url = SHEETS_URL + "?data=" + encodeURIComponent(payload);
-
-await fetch(url);
-
-mostrarToast("✓ Guardado en Sheet","success");
-
-// recargar datos automáticamente
-await fetchSheets();
-
-}catch(e){
-
-console.error("[Sheet error]",e);
-
-mostrarToast("✗ Error Sheet: "+e.message,"error");
-
-}
-
-}
+        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbzFYO2Md3SDxZlbI4zyW2ZwNWOYpo38B0fQxBiJnvjppAQFsyEot0KKMveeyp4O2Kje/exec';
+        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbzFYO2Md3SDxZlbI4zyW2ZwNWOYpo38B0fQxBiJnvjppAQFsyEot0KKMveeyp4O2Kje/exec';
+        function fetchSheets(options) {
+            if (!options || options.method !== 'POST') {
+                // GET simple para leer datos — con cors normal
+                fetch(SHEETS_URL2).catch(()=>{});
+                return;
+            }
+            try {
+                const payload = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
+                const encoded = encodeURIComponent(payload);
+                const url = SHEETS_URL2 + '?data=' + encoded;
+                console.log('[Sheet] Enviando → URL length:', url.length);
+                fetch(url)
+                    .then(r => r.text())
+                    .then(txt => {
+                        try {
+                            const d = JSON.parse(txt);
+                            if (d.ok) {
+                                mostrarToast('✓ Guardado en Sheet', 'success');
+                            } else {
+                                mostrarToast('✗ Sheet error: ' + (d.error||txt.substring(0,100)), 'error');
+                            }
+                        } catch(e) {
+                            mostrarToast('✗ Respuesta rara: ' + txt.substring(0,100), 'error');
+                        }
+                    })
+                    .catch(e => {
+                        mostrarToast('✗ CORS/Red: ' + e.message, 'error');
+                    });
+            } catch(e) {
+                console.error('[Sheet error]', e);
+                mostrarToast('⚠ Error al enviar al Sheet: ' + e.message, 'error');
+            }
+        }
 
         // TEST: botón en panel debug para probar GET y POST al sheet
         function testConexionSheet() {
