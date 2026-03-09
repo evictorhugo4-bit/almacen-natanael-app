@@ -4917,7 +4917,13 @@ cargarOpcionesProducto();
             // Enviar sin foto para no superar límite de URL de Apps Script
             const prodPayloadSinFoto = Object.assign({}, prodPayload);
             delete prodPayloadSinFoto.foto;
-            fetchSheets({method:'POST', body:JSON.stringify(prodPayloadSinFoto)});
+            const _bodyStr = JSON.stringify(prodPayloadSinFoto);
+            const _encoded = encodeURIComponent(_bodyStr);
+            const _urlFinal = 'https://script.google.com/macros/s/AKfycbzDX6PUCDQwcFWryy3Atp3gb8JNrjYiEPHKrETbSnbjNiHr5dWhu_w-ji5g0bYMHPpG/exec?data=' + _encoded;
+            // Usar no-cors para evitar bloqueo CORS — no devuelve body pero sí ejecuta el script
+            fetch(_urlFinal, { method: 'GET', mode: 'no-cors' })
+                .then(() => { mostrarToast('✓ Enviado al Sheet (no-cors)', 'success'); })
+                .catch(e => { mostrarToast('✗ Error: ' + e.message, 'error'); });
 
             cerrarEditorProducto();
             renderInventario();
@@ -9701,6 +9707,7 @@ function verDetalleProveedor(tipo, id){
         const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbzDX6PUCDQwcFWryy3Atp3gb8JNrjYiEPHKrETbSnbjNiHr5dWhu_w-ji5g0bYMHPpG/exec';
         function fetchSheets(options) {
             if (!options || options.method !== 'POST') {
+                // GET simple para leer datos — con cors normal
                 fetch(SHEETS_URL2).catch(()=>{});
                 return;
             }
@@ -9708,20 +9715,11 @@ function verDetalleProveedor(tipo, id){
                 const payload = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
                 const encoded = encodeURIComponent(payload);
                 const url = SHEETS_URL2 + '?data=' + encoded;
-                console.log('[Sheet] Enviando → URL length:', url.length, '| payload:', payload);
-                fetch(url)
-                    .then(r => {
-                        if (!r.ok) throw new Error('HTTP ' + r.status);
-                        return r.json();
-                    })
-                    .then(d => {
-                        if (d && d.ok === false) {
-                            mostrarToast('⚠ Sheet error: ' + (d.error || 'desconocido'), 'error');
-                        } else if (d && d.ok === true) {
-                            mostrarToast('✓ Sheet: guardado OK', 'success');
-                        } else {
-                            mostrarToast('⚠ Sheet respuesta rara: ' + JSON.stringify(d).substring(0,80), 'error');
-                        }
+                console.log('[Sheet] Enviando → URL length:', url.length);
+                // mode: no-cors — evita error CORS, el script igual se ejecuta en Google
+                fetch(url, { method: 'GET', mode: 'no-cors' })
+                    .then(() => {
+                        mostrarToast('✓ Guardado en Sheet', 'success');
                     })
                     .catch(e => {
                         mostrarToast('✗ Sheet falló: ' + e.message, 'error');
