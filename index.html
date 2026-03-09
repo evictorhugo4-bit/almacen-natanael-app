@@ -3482,14 +3482,46 @@ _sheetProductos.forEach(p => {
         // Convierte cualquier URL de Drive al formato thumbnail (funciona en móvil y desktop)
         function driveUrl(url) {
             if (!url) return '';
-            if (url.startsWith('data:')) return url; // base64 directo
+            // Base64 → mostrar directo (guardado en sheet)
+            if (url.startsWith('data:')) return url;
+            // URL normal (no Drive) → directo
             if (!url.includes('drive.google.com') && !url.includes('googleusercontent.com')) return url;
-            // Extraer ID del archivo de Drive
-            const m = url.match(/\/d\/([\w-]{25,})/) || url.match(/[?&]id=([\w-]{25,})/) || url.match(/\/d\/([\w-]+)/);
+            // URL de Drive vieja → intentar thumbnail igual
+            const m = url.match(/\/d\/([\w-]+)/) || url.match(/[?&]id=([\w-]+)/);
             if (!m) return url;
-            const id = m[1];
-            // Usar thumbnail de Drive — funciona en móvil y desktop sin autenticación
-            return 'https://drive.google.com/thumbnail?id=' + id + '&sz=w400';
+            return 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w300';
+        }
+
+        // Sube imagen a ImgBB (hosting gratuito, URL permanente, funciona en móvil)
+        function subirFotoImgBB(dataUrl, callback) {
+            comprimirFotoParaSheet(dataUrl, function(comprimida) {
+                // Extraer solo el base64 sin el prefijo data:...;base64,
+                const base64 = comprimida.split(',')[1];
+                const IMGBB_KEY = '0ee065ced332ac96486ee8e8daee84ae';
+                const formData = new FormData();
+                formData.append('image', base64);
+                fetch('https://api.imgbb.com/1/upload?key=' + IMGBB_KEY, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(r => r.json())
+                .then(res => {
+                    if (res.success) {
+                        console.log('[ImgBB] URL:', res.data.url);
+                        mostrarToast('✓ Imagen subida', 'success');
+                        callback(res.data.url);
+                    } else {
+                        console.error('[ImgBB] Error:', res);
+                        mostrarToast('⚠ Error al subir imagen', 'error');
+                        callback(comprimida); // fallback: guardar base64 comprimido
+                    }
+                })
+                .catch(e => {
+                    console.error('[ImgBB] Error red:', e);
+                    mostrarToast('⚠ Sin conexión para subir imagen', 'error');
+                    callback(comprimida); // fallback
+                });
+            });
         }
 
         function comprimirFotoParaSheet(dataUrl, callback) {
@@ -3497,7 +3529,7 @@ _sheetProductos.forEach(p => {
                 const img = new Image();
                 img.onload = function() {
                     const canvas = document.createElement('canvas');
-                    const MAX = 400; // max 400px en cualquier lado
+                    const MAX = 300; // max 300px para mantener base64 pequeño
                     let w = img.width, h = img.height;
                     if (w > MAX || h > MAX) {
                         if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
@@ -3505,8 +3537,8 @@ _sheetProductos.forEach(p => {
                     }
                     canvas.width = w; canvas.height = h;
                     canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                    // Calidad 0.6 para mantener bajo 150KB
-                    const compressed = canvas.toDataURL('image/jpeg', 0.6);
+                    // Calidad 0.45 para mantener base64 bajo ~40KB
+                    const compressed = canvas.toDataURL('image/jpeg', 0.45);
                     console.log('[Foto] Original:', Math.round(dataUrl.length/1024)+'KB → Comprimida:', Math.round(compressed.length/1024)+'KB');
                     callback(compressed);
                 };
@@ -5007,20 +5039,22 @@ cargarOpcionesProducto();
             };
             const fotoOriginal = data.foto || '';
             if (fotoOriginal && fotoOriginal.startsWith('data:')) {
-                // Base64 nuevo → comprimir antes de enviar al Apps Script (que lo sube a Drive)
-                comprimirFotoParaSheet(fotoOriginal, function(fotoComprimida) {
-                    prodPayload.foto   = fotoComprimida;
-                    prodPayload.imagen = fotoComprimida;
-                    console.log('[Foto] Enviando base64 comprimido al script:', Math.round(fotoComprimida.length/1024)+'KB');
+                // Foto nueva en base64 → subir a ImgBB y guardar solo la URL
+                mostrarToast('⏳ Subiendo imagen...', 'info');
+                subirFotoImgBB(fotoOriginal, function(urlImagen) {
+                    prodPayload.foto   = urlImagen;
+                    prodPayload.imagen = urlImagen;
                     fetchSheets({ method: 'POST', body: JSON.stringify(prodPayload) });
+                    // Actualizar en memoria local también
+                    const idx2 = _sheetProductos.findIndex(p => p.id == data.id);
+                    if (idx2 !== -1) _sheetProductos[idx2].foto = urlImagen;
                 });
-            } else if (fotoOriginal && fotoOriginal.includes('drive.google.com')) {
-                // Ya es URL de Drive → enviar directo sin resubir
+            } else if (fotoOriginal) {
+                // Ya es URL → enviar directo
                 prodPayload.foto   = fotoOriginal;
                 prodPayload.imagen = fotoOriginal;
                 fetchSheets({ method: 'POST', body: JSON.stringify(prodPayload) });
             } else {
-                // Sin foto → enviar sin campo imagen (no pisar URL existente en sheet)
                 fetchSheets({ method: 'POST', body: JSON.stringify(prodPayload) });
             }
 
@@ -9800,8 +9834,8 @@ function verDetalleProveedor(tipo, id){
 
         // SINCRONIZACIÓN GOOGLE SHEETS — Tiempo real (30s)
         // ══════════════════════════════════════════════════════
-        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbxo7NeJ5UfkfVdB1ryIfMPP43iXSCHhY4cAo665NHPbZp8EB3xmW-C7LMQqCbs7jgXS/exec';
-        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbxo7NeJ5UfkfVdB1ryIfMPP43iXSCHhY4cAo665NHPbZp8EB3xmW-C7LMQqCbs7jgXS/exec';
+        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbwc9BPYodet9Ecx95yN7T0VboQIsWV16IuGQ8FOOeK1Rfsy3e9_SoYK92MGMEv7LlB4/exec';
+        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbwc9BPYodet9Ecx95yN7T0VboQIsWV16IuGQ8FOOeK1Rfsy3e9_SoYK92MGMEv7LlB4/exec';
         function fetchSheets(options) {
             if (!options || options.method !== 'POST') {
                 fetch(SHEETS_URL2).catch(()=>{});
