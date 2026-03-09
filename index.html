@@ -3256,7 +3256,7 @@ _sheetProductos.forEach(p => {
 
             dropdown.innerHTML = matches.map(c => {
                 const fotoHtml = c.foto
-                    ? `<img src="${c.foto}" class="w-7 h-7 rounded-lg object-cover shrink-0" alt="">`
+                    ? `<img src="${driveUrl(c.foto)}" class="w-7 h-7 rounded-lg object-cover shrink-0" alt="">`
                     : `<div class="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-black text-xs shrink-0">${c.nombre[0].toUpperCase()}</div>`;
                 return `
                 <button type="button"
@@ -3482,11 +3482,14 @@ _sheetProductos.forEach(p => {
         // Convierte cualquier URL de Drive al formato thumbnail (funciona en móvil y desktop)
         function driveUrl(url) {
             if (!url) return '';
-            if (!url.includes('drive.google.com')) return url; // base64 u otra URL
-            const m = url.match(/\/d\/([\w-]{25,})/) || url.match(/[?&]id=([\w-]{25,})/);
+            if (url.startsWith('data:')) return url; // base64 directo
+            if (!url.includes('drive.google.com') && !url.includes('googleusercontent.com')) return url;
+            // Extraer ID del archivo de Drive
+            const m = url.match(/\/d\/([\w-]{25,})/) || url.match(/[?&]id=([\w-]{25,})/) || url.match(/\/d\/([\w-]+)/);
             if (!m) return url;
-            const id = m[1] || m[2];
-            return 'https://lh3.googleusercontent.com/d/' + id + '=w400';
+            const id = m[1];
+            // Usar thumbnail de Drive — funciona en móvil y desktop sin autenticación
+            return 'https://drive.google.com/thumbnail?id=' + id + '&sz=w400';
         }
 
         function comprimirFotoParaSheet(dataUrl, callback) {
@@ -3573,7 +3576,7 @@ _sheetProductos.forEach(p => {
                     const color = colors[item.nombre.charCodeAt(0) % colors.length];
                     const initials = item.nombre.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
                     const thumb = item.foto
-                        ? `<img src="${item.foto}" class="w-9 h-9 object-contain rounded-lg shrink-0" alt="">`
+                        ? `<img src="${driveUrl(item.foto)}" class="w-9 h-9 object-contain rounded-lg shrink-0" alt="">`
                         : `<div class="w-9 h-9 rounded-lg flex items-center justify-center text-[10px] font-black shrink-0"
                                style="background:${color}22;color:${color};border:1.5px solid ${color}44">${initials}</div>`;
                     return `
@@ -4714,7 +4717,7 @@ container.innerHTML = productosVisibles.map((p) => {
                     <div class="relative h-32 flex items-center justify-center overflow-hidden"
                          style="background: linear-gradient(135deg, #0d1420 0%, #1e293b 100%);">
                         ${p.foto
-                            ? `<img src="${p.foto}" alt="${Utils.escHtml(p.nombre)}" class="w-full h-full object-contain p-1">`
+                            ? `<img src="${driveUrl(p.foto)}" alt="${Utils.escHtml(p.nombre)}" class="w-full h-full object-contain p-1">`
                             : `<div class="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-black"
                                  style="background:${color}22; color:${color}; border: 1.5px solid ${color}44">${initials}</div>`
                         }
@@ -4857,7 +4860,7 @@ cargarOpcionesProducto();
                 const imgEl = document.getElementById('fotoPreviewImg');
                 const placeholder = document.getElementById('fotoPreviewPlaceholder');
                 if (p.foto) {
-                    imgEl.src = p.foto;
+                    imgEl.src = driveUrl(p.foto);
                     imgEl.classList.remove('hidden');
                     placeholder.classList.add('hidden');
                 } else {
@@ -5267,7 +5270,7 @@ console.log("CLIENTE COMPLETO:", c);
                 const deudaReal     = getDeudaCliente(c);
 
                 const fotoHtml = c.foto
-                    ? `<img src="${c.foto}" class="w-12 h-12 rounded-xl object-cover" alt="">`
+                    ? `<img src="${driveUrl(c.foto)}" class="w-12 h-12 rounded-xl object-cover" alt="">`
                     : `<div class="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-black text-lg">${c.nombre[0].toUpperCase()}</div>`;
 
                 return `
@@ -6783,7 +6786,7 @@ function filtrarProductosCompra(query) {
                 const initials = p.nombre.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
                 const color = colors[p.nombre.charCodeAt(0) % colors.length];
                 const thumb = p.foto
-                    ? `<img src="${p.foto}" class="w-10 h-10 object-contain rounded-lg shrink-0" alt="">`
+                    ? `<img src="${driveUrl(p.foto)}" class="w-10 h-10 object-contain rounded-lg shrink-0" alt="">`
                     : `<div class="w-10 h-10 rounded-lg flex items-center justify-center text-xs font-black shrink-0" style="background:${color}22;color:${color};border:1.5px solid ${color}44">${initials}</div>`;
                 return `<button onclick="seleccionarProductoCompra(${p._idx})"
                     class="flex items-center gap-3 p-3 bg-slate-900 border border-slate-700 rounded-xl hover:border-emerald-500 w-full text-left transition-colors">
@@ -7044,7 +7047,7 @@ const editando = String(itemEnEdicion) === String(item.itemId);
                 const color = colors[item.nombre.charCodeAt(0) % colors.length];
                 const initials = item.nombre.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
                 const thumb = item.foto
-                    ? `<img src="${item.foto}" class="w-9 h-9 object-contain rounded-lg shrink-0" alt="">`
+                    ? `<img src="${driveUrl(item.foto)}" class="w-9 h-9 object-contain rounded-lg shrink-0" alt="">`
                     : `<div class="w-9 h-9 rounded-lg flex items-center justify-center text-[10px] font-black shrink-0" style="background:${color}22;color:${color};border:1.5px solid ${color}44">${initials}</div>`;
                 return `<div class="bg-slate-900 p-2.5 rounded-xl border border-slate-800 flex items-center gap-2">
                     
@@ -8186,7 +8189,7 @@ function filtrarGeneroEgr(query) {
             container.innerHTML = filtrados.map(p => {
                 const initials = p.nombre.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
                 const color = colors[p.nombre.charCodeAt(0) % colors.length];
-                const thumb = p.foto ? `<img src="${p.foto}" class="w-10 h-10 object-contain rounded-lg shrink-0" alt="">` : `<div class="w-10 h-10 rounded-lg flex items-center justify-center text-xs font-black shrink-0" style="background:${color}22;color:${color}">${initials}</div>`;
+                const thumb = p.foto ? `<img src="${driveUrl(p.foto)}" class="w-10 h-10 object-contain rounded-lg shrink-0" alt="">` : `<div class="w-10 h-10 rounded-lg flex items-center justify-center text-xs font-black shrink-0" style="background:${color}22;color:${color}">${initials}</div>`;
                 return `<button onclick="seleccionarProdIngEgr(${p._idx})" class="flex items-center gap-3 p-3 bg-slate-900 border border-slate-700 rounded-xl hover:border-emerald-500 w-full text-left transition-colors">${thumb}<div class="flex-1 min-w-0"><span class="block font-black text-white uppercase text-xs truncate">${Utils.escHtml(p.nombre)}</span><span class="block text-[9px] text-slate-500">Costo: $${Utils.fmt(p.costo||0)} · Precio: $${Utils.fmt(p.precio||0)}</span></div></button>`;
             }).join('');
         }
@@ -8241,7 +8244,7 @@ function eliminarProductoCompra(itemId) {
             container.innerHTML = carritoIngEgr.map(item => {
                 const color = colors[item.nombre.charCodeAt(0) % colors.length];
                 const initials = item.nombre.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
-                const thumb = item.foto ? `<img src="${item.foto}" class="w-9 h-9 object-contain rounded-lg shrink-0" alt="">` : `<div class="w-9 h-9 rounded-lg flex items-center justify-center text-[10px] font-black shrink-0" style="background:${color}22;color:${color}">${initials}</div>`;
+                const thumb = item.foto ? `<img src="${driveUrl(item.foto)}" class="w-9 h-9 object-contain rounded-lg shrink-0" alt="">` : `<div class="w-9 h-9 rounded-lg flex items-center justify-center text-[10px] font-black shrink-0" style="background:${color}22;color:${color}">${initials}</div>`;
                 const val = ingEgrTipo === 'ingreso' ? item.precio : item.costo;
                 return `<div class="bg-slate-900 p-2.5 rounded-xl border border-slate-800 flex items-center gap-2 relative">
 
