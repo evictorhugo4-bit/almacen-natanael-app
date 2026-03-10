@@ -9747,10 +9747,88 @@ window.verDetalleProveedor = function(tipo, id) {
     if (!proveedor) return;
 
     const modal = document.getElementById('modalDetalleProveedor');
-    if (!modal) {
-        console.error("No existe modalDetalleProveedor");
-        return;
-    }
+    if (!modal) { console.error("No existe modalDetalleProveedor"); return; }
+
+    const nombre = proveedor.nombre || "";
+    document.getElementById("detalleProveedorNombre").textContent = nombre;
+
+    const comprasProveedor = _sheetCompras.filter(c =>
+        (c.proveedor || "").toUpperCase() === nombre.toUpperCase()
+    );
+    const pagosComp = (_sheetPagoCompras||[]).filter(p =>
+        (p.proveedor || "").toUpperCase() === nombre.toUpperCase()
+    );
+
+    const totalCompras = comprasProveedor.reduce((s,c)=> s+(Number(c.total)||0), 0);
+    const totalCredito = comprasProveedor.reduce((s,c)=> s+(Number(c.credito)||0), 0);
+    const totalPagado  = pagosComp.reduce((s,p)=> s+(Number(p.monto)||0), 0);
+    const deudaReal    = Math.max(0, totalCredito - totalPagado);
+
+    document.getElementById("detalleProvTotalCompras").textContent = "$"+Utils.fmt(totalCompras);
+    document.getElementById("detalleProvTotalDeuda").textContent   = "$"+Utils.fmt(deudaReal);
+
+    // -- COMPRAS PENDIENTES: una fila por producto --
+    const filasPend = [];
+    comprasProveedor.forEach(c => {
+        if ((Number(c.credito)||0) <= 0) return;
+        const idC = String(c.id||'').trim();
+        const pagadoEsta = pagosComp
+            .filter(p => !idC || String(p.idCompra||p.IDCOMPRAS||'').trim() === idC)
+            .reduce((s,p)=> s+(Number(p.monto)||0), 0);
+        const saldo = Math.max(0, (Number(c.credito)||0) - pagadoEsta);
+        if (saldo <= 0) return;
+        const items = c.items && c.items.length > 0 ? c.items : [{nombre: c.producto||'—', cantidad:1}];
+        items.forEach(item => filasPend.push({c, item, saldo}));
+    });
+    document.getElementById("detalleProvComprasPend").innerHTML = filasPend.length === 0
+        ? '<p style="font-size:10px;color:#475569;font-weight:700;text-transform:uppercase;font-style:italic;">Sin saldo pendiente</p>'
+        : filasPend.map(({c,item,saldo}) => {
+            const nom = (item.cantidad>1?item.cantidad+'x ':'')+( item.nombre||'—');
+            return `<div style="background:#0f172a;border:1px solid #7f1d1d;border-radius:10px;padding:10px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                <div style="flex:1;min-width:0;">
+                    <span style="display:block;font-size:9px;font-weight:900;color:#10b981;text-transform:uppercase;">${Utils.escHtml(c.fecha||'')}</span>
+                    <span style="display:block;font-size:10px;font-weight:700;color:#cbd5e1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📦 ${Utils.escHtml(nom)}</span>
+                </div>
+                <span style="font-size:13px;font-weight:900;color:#f87171;font-family:monospace;">$${Utils.fmt(saldo)}</span>
+            </div>`;
+        }).join('');
+
+    // -- COMPRAS PAGADAS: una fila por producto --
+    const filasPagadas = [];
+    comprasProveedor.forEach(c => {
+        const idC = String(c.id||'').trim();
+        const pagadoEsta = pagosComp
+            .filter(p => !idC || String(p.idCompra||p.IDCOMPRAS||'').trim() === idC)
+            .reduce((s,p)=> s+(Number(p.monto)||0), 0);
+        const saldo = Math.max(0, (Number(c.credito)||0) - pagadoEsta);
+        if (saldo > 0) return;
+        const items = c.items && c.items.length > 0 ? c.items : [{nombre: c.producto||'—', cantidad:1}];
+        items.forEach(item => filasPagadas.push({c, item}));
+    });
+    document.getElementById("detalleProvComprasPagadas").innerHTML = filasPagadas.length === 0
+        ? '<p style="font-size:10px;color:#475569;font-weight:700;text-transform:uppercase;font-style:italic;">Sin compras pagadas</p>'
+        : filasPagadas.map(({c,item}) => {
+            const nom = (item.cantidad>1?item.cantidad+'x ':'')+( item.nombre||'—');
+            return `<div style="background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:10px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                <div style="flex:1;min-width:0;">
+                    <span style="display:block;font-size:9px;font-weight:900;color:#10b981;text-transform:uppercase;">${Utils.escHtml(c.fecha||'')}</span>
+                    <span style="display:block;font-size:10px;font-weight:700;color:#cbd5e1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📦 ${Utils.escHtml(nom)}</span>
+                </div>
+                <span style="font-size:13px;font-weight:900;color:#34d399;font-family:monospace;">$${Utils.fmt(c.total||0)}</span>
+            </div>`;
+        }).join('');
+
+    // -- HISTORIAL DE PAGOS --
+    document.getElementById("detalleProvPagos").innerHTML = pagosComp.length === 0
+        ? '<p style="font-size:10px;color:#475569;font-weight:700;text-transform:uppercase;font-style:italic;">Sin pagos registrados</p>'
+        : pagosComp.map(p => `
+            <div style="background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:10px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <span style="display:block;font-size:9px;font-weight:900;color:#10b981;text-transform:uppercase;">${Utils.escHtml(p.fecha||'')}</span>
+                    <span style="display:block;font-size:10px;color:#94a3b8;">${Utils.escHtml(p.producto||p.formaPago||'')}</span>
+                </div>
+                <span style="font-size:13px;font-weight:900;color:#34d399;font-family:monospace;">$${Utils.fmt(p.monto||0)}</span>
+            </div>`).join('');
 
     toggleModal('modalDetalleProveedor', true);
 };
