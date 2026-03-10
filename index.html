@@ -10479,7 +10479,7 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
         const fechaStockFisico = String(row['FECHA STOCK FISICO'] || '').trim();
         const _siRaw = row['STOCK INICIAL MENSUAL'];
         const stockInicioRow = (_siRaw !== undefined && _siRaw !== '' && _siRaw !== null) ? parseFloat(_siRaw) : null;
-        const fechaStockInicioRow = String(row['FECHA INICIAL'] || row['FECHA STOCK INICIAL MENSUAL'] || '').trim();
+        const fechaStockInicioRow = String(row['FECHA INICIAL'] || '').trim();
 
         let prod = prodPorId.get(id);
 
