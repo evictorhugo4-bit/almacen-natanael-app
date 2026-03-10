@@ -4786,31 +4786,30 @@ function recalcularTodosLosStocks() {
     _sheetProductos.forEach(p => {
         const nombre = p.nombre.trim().toUpperCase();
 
-        // ── REGLA 1: hay STOCK FISICO verificado manualmente ──
-        const sf    = p.stockFisico;
-        const sfVal = (sf !== null && sf !== undefined && sf !== '') ? parseFloat(sf) : NaN;
-        const sfFecha = (p.fechaStockFisico && String(p.fechaStockFisico).trim()) ? parseFechaNum(p.fechaStockFisico) : null;
-
-        if (!isNaN(sfVal) && sfFecha) {
-            mapaBase[nombre]   = sfVal;
-            mapaRefNum[nombre] = sfFecha;
-            return;
+        // ── REGLA 1: STOCK FISICO verificado manualmente ──
+        // null = celda vacía en sheet; 0 = valor cero real
+        if (p.stockFisico !== null && p.fechaStockFisico) {
+            const refNum = parseFechaNum(p.fechaStockFisico);
+            if (refNum) {
+                mapaBase[nombre]   = parseFloat(p.stockFisico);
+                mapaRefNum[nombre] = refNum;
+                return;
+            }
         }
 
-        // ── REGLA 2: hay STOCK INICIAL MENSUAL ──
-        const si    = p.stockInicio;
-        const siVal = (si !== null && si !== undefined && si !== '') ? parseFloat(si) : NaN;
-        const siFecha = (p.fechaStockInicio && String(p.fechaStockInicio).trim()) ? parseFechaNum(p.fechaStockInicio) : null;
-
-        if (!isNaN(siVal) && siFecha) {
-            mapaBase[nombre]   = siVal;
-            mapaRefNum[nombre] = siFecha;
-            return;
+        // ── REGLA 2: STOCK INICIAL MENSUAL ──
+        if (p.stockInicio !== null && p.fechaStockInicio) {
+            const refNum = parseFechaNum(p.fechaStockInicio);
+            if (refNum) {
+                mapaBase[nombre]   = parseFloat(p.stockInicio);
+                mapaRefNum[nombre] = refNum;
+                return;
+            }
         }
 
-        // ── REGLA 3: fallback al STOCK ACTUAL del sheet sin filtro de fecha ──
+        // ── REGLA 3: fallback — STOCK ACTUAL del sheet, sin filtro de fecha ──
         mapaBase[nombre]   = parseFloat(p.stock) || 0;
-        mapaRefNum[nombre] = null; // sin filtro = toma todos los movimientos
+        mapaRefNum[nombre] = null;
     });
 
     // Restar ventas posteriores a la fecha base
@@ -10475,10 +10474,12 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
         const codigos   = String(row['CODIGOS'] || '').trim();
         const vencimiento     = String(row['VENCIMIENTO'] || '').trim();
         const stockMin        = parseFloat(row['STOCK MINIMO X CATEGORIA'] || 0) || 0;
-        const stockFisico     = row['STOCK FISICO'] !== undefined && row['STOCK FISICO'] !== '' ? parseFloat(row['STOCK FISICO']) : null;
-        const fechaStockFisico= String(row['FECHA STOCK FISICO'] || '').trim();
-        const stockInicioRow  = row['STOCK INICIAL MENSUAL'] !== undefined && row['STOCK INICIAL MENSUAL'] !== '' ? parseFloat(row['STOCK INICIAL MENSUAL']) : null;
-        const fechaStockInicioRow = String(row['FECHA STOCK INICIAL MENSUAL'] || '').trim();
+        const _sfRaw = row['STOCK FISICO'];
+        const stockFisico = (_sfRaw !== undefined && _sfRaw !== '' && _sfRaw !== null) ? parseFloat(_sfRaw) : null;
+        const fechaStockFisico = String(row['FECHA STOCK FISICO'] || '').trim();
+        const _siRaw = row['STOCK INICIAL MENSUAL'];
+        const stockInicioRow = (_siRaw !== undefined && _siRaw !== '' && _siRaw !== null) ? parseFloat(_siRaw) : null;
+        const fechaStockInicioRow = String(row['FECHA INICIAL'] || row['FECHA STOCK INICIAL MENSUAL'] || '').trim();
 
         let prod = prodPorId.get(id);
 
@@ -10500,10 +10501,10 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
             prod.codigos    = codigos   || prod.codigos;
             prod.vencimiento= vencimiento || prod.vencimiento;
             prod.stockMin        = stockMin;
-            if (stockFisico !== null)      prod.stockFisico      = stockFisico;
-            if (fechaStockFisico)          prod.fechaStockFisico = fechaStockFisico;
-            if (stockInicioRow !== null)   prod.stockInicio      = stockInicioRow;
-            if (fechaStockInicioRow)       prod.fechaStockInicio = fechaStockInicioRow;
+            prod.stockFisico      = stockFisico;       // null si vacío en sheet
+            prod.fechaStockFisico = fechaStockFisico;
+            prod.stockInicio      = stockInicioRow;    // null si vacío en sheet
+            prod.fechaStockInicio = fechaStockInicioRow;
             actualizados++;
         } else {
             // crear producto nuevo desde sheet
@@ -10524,9 +10525,9 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
                 codigos:     codigos,
                 vencimiento:      vencimiento,
                 stockMin:         stockMin,
-                stockFisico:      stockFisico,
+                stockFisico:      stockFisico,        // null si vacío
                 fechaStockFisico: fechaStockFisico,
-                stockInicio:      stockInicioRow,
+                stockInicio:      stockInicioRow,     // null si vacío
                 fechaStockInicio: fechaStockInicioRow,
                 fromSheet:        true
             };
