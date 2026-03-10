@@ -11465,7 +11465,9 @@ console.log("FILTRADAS:", filtradas.length);
             // Actualizar en memoria: el stock verificado se convierte en nuevo punto de partida
             prod.stockVerificado   = real;
             prod.fechaVerif        = fecha;
-            prod.stockInicio       = real;   // nuevo punto de partida para el Kardex
+            prod.stockFisico       = real;   // ← punto de partida para recalcularTodosLosStocks
+            prod.fechaStockFisico  = fecha;  // ← fecha de referencia para filtrar movimientos
+            prod.stockInicio       = real;
             prod.stockComienzo     = real;
             prod.fechaStockInicio  = fecha;
 
@@ -11490,6 +11492,7 @@ console.log("FILTRADAS:", filtradas.length);
             };
             fetchSheets({ method: 'POST', body: JSON.stringify(payload) });
 
+            recalcularTodosLosStocks();
             mostrarToast(`✅ Stock de "${prod.nombre}" verificado: ${Utils.fmt(real)}`);
             cerrarVerificarStock();
             renderInventario();
