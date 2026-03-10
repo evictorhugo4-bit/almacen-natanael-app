@@ -1060,7 +1060,7 @@ GUARDAR PRODUCTO
             <div class="grid grid-cols-2 gap-3">
 
                 <div class="glass-card p-4 rounded-2xl text-center">
-                    <span class="text-[9px] font-black text-slate-500 uppercase tracking-widest block">
+                    <span id="labelProvTotalCompras" class="text-[9px] font-black text-slate-500 uppercase tracking-widest block">
                         Total Compras
                     </span>
 
@@ -1081,38 +1081,18 @@ GUARDAR PRODUCTO
 
             <!-- COMPRAS PENDIENTES -->
             <div>
-
-                <h3 class="text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-2">
+                <h3 onclick="toggleSeccion('secProvComprasPend')"
+                    class="cursor-pointer text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-2 flex justify-between items-center">
                     Compras con saldo pendiente
+                    <span id="icon-secProvComprasPend">▼</span>
                 </h3>
-
-                <div id="detalleProvComprasPend"></div>
-
+                <div id="secProvComprasPend" class="space-y-2 hidden">
+                    <div id="detalleProvComprasPend"></div>
+                </div>
             </div>
 
-
-            <!-- COMPRAS PAGADAS -->
-            <div>
-
-                <h3 class="text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-2">
-                    Compras Pagadas
-                </h3>
-
-                <div id="detalleProvComprasPagadas"></div>
-
-            </div>
-
-
-            <!-- HISTORIAL PAGOS -->
-            <div>
-
-                <h3 class="text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-2">
-                    Historial de Pagos
-                </h3>
-
-                <div id="detalleProvPagos"></div>
-
-            </div>
+            <div id="detalleProvComprasPagadas" class="hidden"></div>
+            <div id="detalleProvPagos" class="hidden"></div>
 
         </div>
 
@@ -9655,48 +9635,89 @@ function calcularCajaEsperada() {
         
 
         function renderProveedores(tipo) {
-            const db       = tipo === 'negocio' ? _sheetProveedoresNegocio : _sheetProveedoresGastos;
             const listaId  = tipo === 'negocio' ? 'listaProveedoresNegocio' : 'listaProveedoresGastos';
             const filtroId = tipo === 'negocio' ? 'filtroProveedoresNegocio' : 'filtroProveedoresGastos';
             const q = (document.getElementById(filtroId)?.value || '').toUpperCase().trim();
             const lista = document.getElementById(listaId);
             if (!lista) return;
-            const filtrados = q ? db.filter(p => (p.nombre||'').toUpperCase().includes(q)) : db;
+
+            if (tipo === 'gastos') {
+                // Mostrar CATEGORIAS de egresos (concepto), no proveedores
+                const catMap = new Map();
+                (_sheetEgresos||[]).forEach(e => {
+                    const cat = (e.concepto||'').trim();
+                    if (!cat) return;
+                    if (!catMap.has(cat)) catMap.set(cat, { nombre: cat, deuda: 0, count: 0 });
+                    const g = catMap.get(cat);
+                    const idS = String(e.idSheet||'').trim();
+                    const pagado = (_sheetPagoEgresos||[])
+                        .filter(p => idS && String(p.IDEGRESOS||p.idEgreso||'').trim() === idS)
+                        .reduce((s,p)=> s+(Number(p.MONTO||p.monto)||0), 0);
+                    const saldo = Math.max(0, (Number(e.credito)||0) - pagado);
+                    g.deuda += saldo;
+                    g.count++;
+                });
+                let cats = Array.from(catMap.values());
+                if (q) cats = cats.filter(c => c.nombre.toUpperCase().includes(q));
+                cats.sort((a,b) => b.deuda - a.deuda);
+                if (!cats.length) {
+                    lista.innerHTML = '<div class="glass-card p-10 rounded-2xl text-center text-slate-600 text-xs font-black uppercase">Sin categorías de gastos</div>';
+                    return;
+                }
+                lista.innerHTML = cats.map(cat => {
+                    const inicial = cat.nombre.charAt(0).toUpperCase();
+                    const estadoHtml = cat.deuda > 0
+                        ? `<span style="color:#f87171;font-size:10px;font-weight:900;">Debe: $${Utils.fmt(cat.deuda)}</span>`
+                        : `<span style="color:#f97316;font-size:10px;font-weight:900;">Al día ✓</span>`;
+                    return `<div class="glass-card rounded-2xl border border-slate-800 hover:border-slate-600 transition-colors" style="padding:14px 16px;">
+                        <div style="display:flex;align-items:center;gap:14px;">
+                            <div style="width:44px;height:44px;border-radius:50%;background:#f9731633;border:2px solid #f9731666;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                <span style="font-size:18px;font-weight:900;color:#f97316;">${inicial}</span>
+                            </div>
+                            <div style="flex:1;min-width:0;">
+                                <div style="font-weight:900;color:white;font-size:14px;text-transform:uppercase;">${Utils.escHtml(cat.nombre)}</div>
+                                <div style="color:#64748b;font-size:9px;">${cat.count} gastos</div>
+                            </div>
+                            <div style="text-align:right;margin-right:8px;">${estadoHtml}</div>
+                            <button onclick="verDetalleCategoriaGasto(this.getAttribute('data-cat'))" data-cat="${Utils.escHtml(cat.nombre)}"
+                                style="padding:5px 8px;background:#1e3a5f;color:#34d399;border:none;border-radius:7px;cursor:pointer;font-size:13px;"
+                                title="Ver detalle">👁️</button>
+                        </div>
+                    </div>`;
+                }).join('');
+                return;
+            }
+
+            // NEGOCIO — igual que antes
+            const db = _sheetProveedoresNegocio;
+            const filtrados = (q ? db.filter(p => (p.nombre||'').toUpperCase().includes(q)) : [...db])
+                .sort((a, b) => {
+                    const da = _sheetCompras.filter(c=>(c.proveedor||'').toUpperCase()===(a.nombre||'').toUpperCase()).reduce((s,c)=>s+(Number(c.credito)||0),0);
+                    const db2 = _sheetCompras.filter(c=>(c.proveedor||'').toUpperCase()===(b.nombre||'').toUpperCase()).reduce((s,c)=>s+(Number(c.credito)||0),0);
+                    return db2 - da;
+                });
             if (!filtrados.length) {
                 lista.innerHTML = '<div class="glass-card p-10 rounded-2xl text-center text-slate-600 text-xs font-black uppercase">Sin proveedores registrados</div>';
                 return;
             }
-            const accentColor = tipo === 'negocio' ? '#10b981' : '#f97316';
-
             lista.innerHTML = filtrados.map(p => {
                 const nombre = p.nombre || '';
                 const inicial = nombre.charAt(0).toUpperCase() || '?';
-
-                // Calcular compras y deuda desde _sheetCompras
                 const comprasProv = _sheetCompras.filter(c => (c.proveedor||'').toUpperCase() === nombre.toUpperCase());
                 const cantCompras = comprasProv.length;
                 const deudaProv = comprasProv.reduce((s, c) => s + (Number(c.credito) || 0), 0);
-
                 const estadoHtml = deudaProv > 0
-                    ? `<div style="text-align:right;">
-                        <span style="color:#f87171;font-size:10px;font-weight:900;">Debe: $${Utils.fmt(deudaProv)}</span>
-                        <div style="color:#64748b;font-size:9px;">${cantCompras} compras</div>
-                       </div>`
-                    : `<div style="text-align:right;">
-                        <span style="color:${accentColor};font-size:10px;font-weight:900;">Al día ✓</span>
-                        <div style="color:#64748b;font-size:9px;">${cantCompras} compras</div>
-                       </div>`;
-
+                    ? `<div style="text-align:right;"><span style="color:#f87171;font-size:10px;font-weight:900;">Debe: $${Utils.fmt(deudaProv)}</span><div style="color:#64748b;font-size:9px;">${cantCompras} compras</div></div>`
+                    : `<div style="text-align:right;"><span style="color:#10b981;font-size:10px;font-weight:900;">Al día ✓</span><div style="color:#64748b;font-size:9px;">${cantCompras} compras</div></div>`;
                 const extraInfo = [
                     p.telefono ? `<span style="font-size:9px;color:#94a3b8;">📞 ${Utils.escHtml(p.telefono)}</span>` : '',
                     p.direccion ? `<span style="font-size:9px;color:#94a3b8;">📍 ${Utils.escHtml(p.direccion)}</span>` : '',
-                    (tipo === 'negocio' && p.porcentaje) ? `<span style="font-size:9px;background:${accentColor}22;color:${accentColor};padding:1px 6px;border-radius:999px;font-weight:900;">% ${p.porcentaje} ganancia</span>` : ''
+                    p.porcentaje ? `<span style="font-size:9px;background:#10b98122;color:#10b981;padding:1px 6px;border-radius:999px;font-weight:900;">% ${p.porcentaje} ganancia</span>` : ''
                 ].filter(Boolean).join(' ');
-
                 return `<div class="glass-card rounded-2xl border border-slate-800 hover:border-slate-600 transition-colors" style="padding:14px 16px;">
                     <div style="display:flex;align-items:center;gap:14px;">
-                        <div style="width:44px;height:44px;border-radius:50%;background:${accentColor}33;border:2px solid ${accentColor}66;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                            <span style="font-size:18px;font-weight:900;color:${accentColor};">${inicial}</span>
+                        <div style="width:44px;height:44px;border-radius:50%;background:#10b98133;border:2px solid #10b98166;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <span style="font-size:18px;font-weight:900;color:#10b981;">${inicial}</span>
                         </div>
                         <div style="flex:1;min-width:0;">
                             <div style="font-weight:900;color:white;font-size:14px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${Utils.escHtml(nombre)}</div>
@@ -9704,20 +9725,10 @@ function calcularCajaEsperada() {
                         </div>
                         ${estadoHtml}
                         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;margin-left:8px;">
-
-    <button onclick="verDetalleProveedor('${tipo}','${p.id}')"
-        style="padding:5px 8px;background:#1e3a5f;color:#34d399;border:none;border-radius:7px;cursor:pointer;font-size:13px;"
-        title="Ver detalle">👁️</button>
-
-    <button onclick="editarProveedor('${tipo}','${p.id}')"
-        style="padding:5px 8px;background:#1e3a5f;color:#60a5fa;border:none;border-radius:7px;cursor:pointer;font-size:13px;"
-        title="Editar">✏️</button>
-
-    <button onclick="pedirEliminarProveedor('${tipo}','${p.id}')"
-        style="padding:5px 8px;background:#7f1d1d;color:#fca5a5;border:none;border-radius:7px;cursor:pointer;font-size:13px;"
-        title="Eliminar">🗑️</button>
-
-</div>
+                            <button onclick="verDetalleProveedor('negocio','${p.id}')" style="padding:5px 8px;background:#1e3a5f;color:#34d399;border:none;border-radius:7px;cursor:pointer;font-size:13px;" title="Ver detalle">👁️</button>
+                            <button onclick="editarProveedor('negocio','${p.id}')" style="padding:5px 8px;background:#1e3a5f;color:#60a5fa;border:none;border-radius:7px;cursor:pointer;font-size:13px;" title="Editar">✏️</button>
+                            <button onclick="pedirEliminarProveedor('negocio','${p.id}')" style="padding:5px 8px;background:#7f1d1d;color:#fca5a5;border:none;border-radius:7px;cursor:pointer;font-size:13px;" title="Eliminar">🗑️</button>
+                        </div>
                     </div>
                 </div>`;
             }).join('');
@@ -9739,6 +9750,92 @@ function cerrarDetalleProveedor(){
         function filtrarProveedores(tipo) { renderProveedores(tipo); }
 
 
+window.verDetalleCategoriaGasto = function(categoria) {
+    const modal = document.getElementById('modalDetalleProveedor');
+    if (!modal) return;
+
+    document.getElementById('detalleProveedorNombre').textContent = categoria;
+    const labelComp = document.getElementById('labelProvTotalCompras');
+    if (labelComp) labelComp.textContent = 'Total Gastos';
+
+    const egresos = (_sheetEgresos||[]).filter(e => (e.concepto||'').trim() === categoria);
+    const totalGastos = egresos.reduce((s,e)=> s+(Number(e.total)||0), 0);
+    const totalCredito = egresos.reduce((s,e)=> s+(Number(e.credito)||0), 0);
+    const totalPagado = (_sheetPagoEgresos||[])
+        .filter(p => egresos.some(e => String(e.idSheet||'').trim() === String(p.IDEGRESOS||p.idEgreso||'').trim()))
+        .reduce((s,p)=> s+(Number(p.MONTO||p.monto)||0), 0);
+    const deudaReal = Math.max(0, totalCredito - totalPagado);
+
+    document.getElementById('detalleProvTotalCompras').textContent = '$'+Utils.fmt(totalGastos);
+    document.getElementById('detalleProvTotalDeuda').textContent   = '$'+Utils.fmt(deudaReal);
+
+    // Pendientes agrupados por idSheet (= IDEGRESOS)
+    const pendientes = [];
+    egresos.forEach(e => {
+        const idS = String(e.idSheet||'').trim();
+        const pagado = (_sheetPagoEgresos||[])
+            .filter(p => idS && String(p.IDEGRESOS||p.idEgreso||'').trim() === idS)
+            .reduce((s,p)=> s+(Number(p.MONTO||p.monto)||0), 0);
+        const saldo = Math.max(0, (Number(e.credito)||0) - pagado);
+        if (saldo <= 0) return;
+        pendientes.push({ e, idS, saldo });
+    });
+    // Ordenar de más reciente a más antiguo
+    pendientes.sort((a,b) => new Date(b.e.fechaISO||0) - new Date(a.e.fechaISO||0));
+
+    document.getElementById('detalleProvComprasPend').innerHTML = pendientes.length === 0
+        ? '<p style="font-size:10px;color:#475569;font-weight:700;text-transform:uppercase;font-style:italic;">Sin saldo pendiente</p>'
+        : pendientes.map(({e, idS, saldo}) => {
+            const desc = e.detalle || e.concepto || '—';
+            return `<div style="background:#0f172a;border:1px solid #7f1d1d;border-radius:10px;padding:10px;margin-bottom:6px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                    <span style="font-size:9px;font-weight:900;color:#10b981;text-transform:uppercase;">${Utils.escHtml(e.fecha||'')}</span>
+                    <span style="font-size:13px;font-weight:900;color:#f87171;font-family:monospace;">$${Utils.fmt(saldo)}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-size:10px;color:#cbd5e1;">📦 ${Utils.escHtml(desc)}</span>
+                    <button onclick="abrirPagoEgreso('${idS}')"
+                        style="padding:3px 7px;background:#064e3b;color:#34d399;border:1px solid #065f46;border-radius:6px;cursor:pointer;font-size:11px;line-height:1;"
+                        title="Registrar pago">💳</button>
+                </div>
+            </div>`;
+        }).join('');
+
+    // Pagadas
+    const pagadas = egresos.filter(e => {
+        const idS = String(e.idSheet||'').trim();
+        const pagado = (_sheetPagoEgresos||[])
+            .filter(p => idS && String(p.IDEGRESOS||p.idEgreso||'').trim() === idS)
+            .reduce((s,p)=> s+(Number(p.MONTO||p.monto)||0), 0);
+        return Math.max(0, (Number(e.credito)||0) - pagado) <= 0;
+    });
+    document.getElementById('detalleProvComprasPagadas').innerHTML = pagadas.length === 0
+        ? '<p style="font-size:10px;color:#475569;font-weight:700;text-transform:uppercase;font-style:italic;">Sin gastos pagados</p>'
+        : pagadas.map(e => `<div style="background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:10px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;">
+            <div><span style="display:block;font-size:9px;font-weight:900;color:#10b981;text-transform:uppercase;">${Utils.escHtml(e.fecha||'')}</span>
+            <span style="font-size:10px;color:#cbd5e1;">${Utils.escHtml(e.detalle||e.concepto||'—')}</span></div>
+            <span style="font-size:13px;font-weight:900;color:#34d399;font-family:monospace;">$${Utils.fmt(e.total||0)}</span>
+        </div>`).join('');
+
+    // Historial pagos
+    const pagosHist = (_sheetPagoEgresos||[]).filter(p =>
+        egresos.some(e => String(e.idSheet||'').trim() === String(p.IDEGRESOS||p.idEgreso||'').trim())
+    );
+    document.getElementById('detalleProvPagos').innerHTML = pagosHist.length === 0
+        ? '<p style="font-size:10px;color:#475569;font-weight:700;text-transform:uppercase;font-style:italic;">Sin pagos registrados</p>'
+        : pagosHist.map(p => `<div style="background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:10px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:9px;font-weight:900;color:#10b981;text-transform:uppercase;">${Utils.escHtml(p.fecha||'')}</span>
+            <span style="font-size:13px;font-weight:900;color:#34d399;font-family:monospace;">$${Utils.fmt(p.MONTO||p.monto||0)}</span>
+        </div>`).join('');
+
+    toggleModal('modalDetalleProveedor', true);
+};
+
+window.pagarItemProv = function(esGasto, id) {
+    if (esGasto) abrirPagoEgreso(id);
+    else abrirPagoCompra(id);
+};
+
 window.verDetalleProveedor = function(tipo, id) {
     console.log("CLICK OK", tipo, id);
 
@@ -9752,44 +9849,90 @@ window.verDetalleProveedor = function(tipo, id) {
     const nombre = proveedor.nombre || "";
     document.getElementById("detalleProveedorNombre").textContent = nombre;
 
-    const comprasProveedor = _sheetCompras.filter(c =>
-        (c.proveedor || "").toUpperCase() === nombre.toUpperCase()
-    );
-    const pagosComp = (_sheetPagoCompras||[]).filter(p =>
-        (p.proveedor || "").toUpperCase() === nombre.toUpperCase()
-    );
+    const esGasto = tipo === 'gastos';
 
-    const totalCompras = comprasProveedor.reduce((s,c)=> s+(Number(c.total)||0), 0);
-    const totalCredito = comprasProveedor.reduce((s,c)=> s+(Number(c.credito)||0), 0);
-    const totalPagado  = pagosComp.reduce((s,p)=> s+(Number(p.monto)||0), 0);
+    // Para negocio: _sheetCompras + _sheetPagoCompras
+    // Para gastos:  _sheetEgresos + _sheetPagoEgresos (proveedor = SUPER CATEGORIA)
+    const registros = esGasto
+        ? (_sheetEgresos||[]).filter(e => (e.concepto||'').toUpperCase() === nombre.toUpperCase())
+        : _sheetCompras.filter(c => (c.proveedor||'').toUpperCase() === nombre.toUpperCase());
+
+    const pagosRegistrados = esGasto
+        ? (_sheetPagoEgresos||[]).filter(p => {
+            const idReg = String(p.IDEGRESOS||p.idEgreso||'').trim();
+            return registros.some(r => String(r.idSheet||'').trim() === idReg);
+          })
+        : (_sheetPagoCompras||[]).filter(p => (p.proveedor||'').toUpperCase() === nombre.toUpperCase());
+
+    const totalCompras = registros.reduce((s,r)=> s+(Number(r.total)||0), 0);
+    const totalCredito = registros.reduce((s,r)=> s+(Number(r.credito)||0), 0);
+    const totalPagado  = esGasto
+        ? pagosRegistrados.reduce((s,p)=> s+(Number(p.MONTO||p.monto)||0), 0)
+        : pagosRegistrados.reduce((s,p)=> s+(Number(p.monto)||0), 0);
     const deudaReal    = Math.max(0, totalCredito - totalPagado);
+
+    // Reutilizar comprasProveedor y pagosComp como alias para el resto del código
+    const comprasProveedor = registros;
+    const pagosComp = pagosRegistrados;
 
     document.getElementById("detalleProvTotalCompras").textContent = "$"+Utils.fmt(totalCompras);
     document.getElementById("detalleProvTotalDeuda").textContent   = "$"+Utils.fmt(deudaReal);
+    // Actualizar labels según tipo
+    const lblCompras = document.getElementById('labelProvTotalCompras');
+    if (lblCompras) lblCompras.textContent = esGasto ? 'Total Gastos' : 'Total Compras';
+    const lblPend = document.querySelector('#secProvComprasPend')?.previousElementSibling?.querySelector('h3') ||
+                    document.querySelector('[onclick*="secProvComprasPend"]');
+    if (lblPend) lblPend.childNodes[0].textContent = esGasto ? 'Gastos con saldo pendiente ' : 'Compras con saldo pendiente ';
 
-    // -- COMPRAS PENDIENTES: una fila por producto --
-    const filasPend = [];
+    // -- COMPRAS/GASTOS PENDIENTES: agrupadas por fechaISO --
+    const gruposCompra = new Map();
     comprasProveedor.forEach(c => {
-        if ((Number(c.credito)||0) <= 0) return;
-        const idC = String(c.id||'').trim();
-        const pagadoEsta = pagosComp
-            .filter(p => !idC || String(p.idCompra||p.IDCOMPRAS||'').trim() === idC)
-            .reduce((s,p)=> s+(Number(p.monto)||0), 0);
+        // Para gastos usar idSheet (= IDEGRESOS en pago), para compras usar id
+        const idC = esGasto ? String(c.idSheet||c.id||'').trim() : String(c.id||'').trim();
+        const pagadoEsta = esGasto
+            ? pagosComp.filter(p => idC && String(p.IDEGRESOS||p.idEgreso||'').trim() === idC)
+                       .reduce((s,p)=> s+(Number(p.MONTO||p.monto)||0), 0)
+            : pagosComp.filter(p => !idC || String(p.idCompra||p.IDCOMPRAS||'').trim() === idC)
+                       .reduce((s,p)=> s+(Number(p.monto)||0), 0);
         const saldo = Math.max(0, (Number(c.credito)||0) - pagadoEsta);
         if (saldo <= 0) return;
-        const items = c.items && c.items.length > 0 ? c.items : [{nombre: c.producto||'—', cantidad:1}];
-        items.forEach(item => filasPend.push({c, item, saldo}));
+        // Agrupar por fechaISO — mismo instante = misma compra
+        const idBase = String(c.fechaISO || c.fecha || '').trim();
+        if (!gruposCompra.has(idBase)) {
+            gruposCompra.set(idBase, { fecha: c.fecha, idBase, idC, saldoTotal: 0, items: [] });
+        }
+        const g = gruposCompra.get(idBase);
+        g.saldoTotal += saldo;
+        const itemsC = c.items && c.items.length > 0 ? c.items
+            : esGasto ? [{nombre: (c.detalle||c.concepto||'—'), cantidad:1}]
+            : [{nombre: c.producto||'—', cantidad:1}];
+        itemsC.forEach(item => g.items.push(item));
     });
-    document.getElementById("detalleProvComprasPend").innerHTML = filasPend.length === 0
+
+    const comprasPendList = Array.from(gruposCompra.values())
+        .sort((a,b) => new Date(b.idBase||0) - new Date(a.idBase||0));
+    document.getElementById("detalleProvComprasPend").innerHTML = comprasPendList.length === 0
         ? '<p style="font-size:10px;color:#475569;font-weight:700;text-transform:uppercase;font-style:italic;">Sin saldo pendiente</p>'
-        : filasPend.map(({c,item,saldo}) => {
-            const nom = (item.cantidad>1?item.cantidad+'x ':'')+( item.nombre||'—');
-            return `<div style="background:#0f172a;border:1px solid #7f1d1d;border-radius:10px;padding:10px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
-                <div style="flex:1;min-width:0;">
-                    <span style="display:block;font-size:9px;font-weight:900;color:#10b981;text-transform:uppercase;">${Utils.escHtml(c.fecha||'')}</span>
-                    <span style="display:block;font-size:10px;font-weight:700;color:#cbd5e1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📦 ${Utils.escHtml(nom)}</span>
+        : comprasPendList.map(({fecha, idC, saldoTotal, items}) => {
+            const itemsHtml = items.map(item => {
+                const nom = (item.cantidad>1?item.cantidad+'x ':'')+( item.nombre||'—');
+                const subtotal = (parseFloat(item.costo||item.precio||0)) * (parseFloat(item.cantidad)||1);
+                return `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid #1e293b20;">
+                    <span style="font-size:9px;color:#94a3b8;">📦</span>
+                    <span style="font-size:10px;color:#cbd5e1;flex:1;">${Utils.escHtml(nom)}</span>
+                    ${subtotal > 0 ? `<span style="font-size:10px;color:#94a3b8;font-family:monospace;">$${Utils.fmt(subtotal)}</span>` : ''}
+                    <button onclick="pagarItemProv(${esGasto?1:0},'${idC}')"
+                        style="padding:3px 7px;background:#064e3b;color:#34d399;border:1px solid #065f46;border-radius:6px;cursor:pointer;font-size:11px;line-height:1;"
+                        title="Registrar pago">💳</button>
+                </div>`;
+            }).join('');
+            const idPago = idC || '';
+            return `<div style="background:#0f172a;border:1px solid #7f1d1d;border-radius:10px;padding:10px;margin-bottom:6px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <span style="font-size:9px;font-weight:900;color:#10b981;text-transform:uppercase;">${Utils.escHtml(fecha||'')}</span>
+                    <span style="font-size:13px;font-weight:900;color:#f87171;font-family:monospace;">$${Utils.fmt(saldoTotal)}</span>
                 </div>
-                <span style="font-size:13px;font-weight:900;color:#f87171;font-family:monospace;">$${Utils.fmt(saldo)}</span>
+                <div style="padding-left:4px;">${itemsHtml}</div>
             </div>`;
         }).join('');
 
