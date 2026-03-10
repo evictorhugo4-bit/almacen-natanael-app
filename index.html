@@ -9997,8 +9997,8 @@ function verDetalleProveedor(tipo, id){
 
         // SINCRONIZACIÓN GOOGLE SHEETS — Tiempo real (30s)
         // ══════════════════════════════════════════════════════
-        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbyFl-Bn1gk2yIyWrt2qFTcHkD-_zXBafxqq0-wvxRnygL-HXpPKAlBvfXxBrch-pa1g/exec';
-        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbyFl-Bn1gk2yIyWrt2qFTcHkD-_zXBafxqq0-wvxRnygL-HXpPKAlBvfXxBrch-pa1g/exec';
+        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbw1FKcSuVw1Wn4LlgeJ_u_jMkpOTkq3b4XgzaEXJhI1fRKfMWVgzZ6071SgZC110Go0/exec';
+        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbw1FKcSuVw1Wn4LlgeJ_u_jMkpOTkq3b4XgzaEXJhI1fRKfMWVgzZ6071SgZC110Go0/exec';
         function fetchSheets(options) {
             if (!options || options.method !== 'POST') {
                 fetch(SHEETS_URL2).catch(()=>{});
@@ -10462,7 +10462,7 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
         if (!id) return;
 
         const nombre    = String(row['NOMBRE'] || row['PRODUCTO'] || '').trim();
-        const stock     = parseFloat(row['STOCK ACTUAL'] || row['STOCK FISICO'] || row['STOCK'] || 0) || 0;
+        const stock     = parseFloat(row['STOCK ACTUAL'] || row['STOCK'] || 0) || 0;
         const costo     = parseFloat(row['PRECIO DE COSTO'] || row['PRECIO COSTO'] || row['COSTO'] || 0) || 0;
         const precio    = parseFloat(row['PRECIO DE VENTA'] || row['PRECIO VENTA'] || row['PRECIO'] || 0) || 0;
         const margen    = parseFloat(row['MARGEN BRUTO'] || 0) || 0;
