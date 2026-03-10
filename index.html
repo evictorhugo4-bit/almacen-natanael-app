@@ -5757,22 +5757,36 @@ return;
             // ── Compras con saldo pendiente ──────────────────────────
             const contCompDeuda = document.getElementById('detalleComprasDeuda');
             if (contCompDeuda) {
-                const comprasPend = todasLasVentas().filter(v => {
+                // Armar filas por producto individual con saldo pendiente
+                const filasPend = [];
+                todasLasVentas().forEach(v => {
                     const vId  = String(v.idCliente || '').trim();
                     const vNom = String(v.cliente   || '').trim().toUpperCase();
-                    return (vId ? vId === idCl : vNom === nomCl) && (parseFloat(v.deuda) || 0) > 0;
+                    if (!(vId ? vId === idCl : vNom === nomCl)) return;
+                    if ((parseFloat(v.deuda) || 0) <= 0) return;
+                    const idV = String(v.id || '').trim();
+                    const pagado = idV ? (_pagoVentasSheet||[])
+                        .filter(p => String(p.idVenta||p.IDVENTAS||'').trim() === idV)
+                        .reduce((a,p) => a + (parseFloat(p.monto)||0), 0) : 0;
+                    const saldo = Math.max(0, (parseFloat(v.deuda)||0) - pagado);
+                    if (saldo <= 0) return;
+                    // Una fila por item
+                    const items = v.items && v.items.length > 0 ? v.items : [{ nombre: v.producto || '—', cantidad: 1, precio: v.total }];
+                    items.forEach(item => {
+                        filasPend.push({ v, item, saldo, idV });
+                    });
                 });
-                contCompDeuda.innerHTML = comprasPend.length === 0
+                contCompDeuda.innerHTML = filasPend.length === 0
                     ? '<p class="text-[10px] text-slate-600 font-bold uppercase italic">Sin saldo pendiente</p>'
-                    : comprasPend.map(v => {
-                        const prods = (v.items||[]).map(i=>(i.cantidad?i.cantidad+'x ':'')+i.nombre).filter(Boolean).join(', ') || v.producto || '';
+                    : filasPend.map(({ v, item, saldo, idV }) => {
+                        const nomProd = (item.cantidad > 1 ? item.cantidad + 'x ' : '') + (item.nombre || '—');
                         return `<div class="bg-slate-900/50 p-3 rounded-xl border border-red-800 flex justify-between items-center gap-2">
                             <div class="flex-1 min-w-0">
                                 <span class="block text-[9px] font-black text-slate-400 uppercase">${Utils.escHtml(v.fecha || '')}</span>
-                                ${prods ? `<span class="block text-[10px] font-bold text-slate-300 truncate">📦 ${Utils.escHtml(prods)}</span>` : ''}
+                                <span class="block text-[10px] font-bold text-slate-300 truncate">📦 ${Utils.escHtml(nomProd)}</span>
                             </div>
                             <div class="flex items-center gap-2 shrink-0">
-                                <span class="text-sm font-black text-red-400 font-mono">$${Utils.fmt(v.deuda || 0)}</span>
+                                <span class="text-sm font-black text-red-400 font-mono">$${Utils.fmt(saldo)}</span>
                                 <button onclick="abrirPagoDesdeVenta('${v.id || ''}', '${c.id}')"
                                     style="padding:6px 10px;background:#064e3b;color:#34d399;border:1px solid #065f46;border-radius:8px;cursor:pointer;font-size:13px;font-weight:900;line-height:1;"
                                     title="Registrar pago">💳</button>
@@ -9765,49 +9779,86 @@ function verDetalleProveedor(tipo, id){
         (c.proveedor || "").toUpperCase() === nombre.toUpperCase()
     );
 
-    // -------- TOTAL COMPRAS ----------
-    const totalCompras = comprasProveedor.reduce((s,c)=> s + (Number(c.total)||0),0);
-
-    // -------- DEUDA ----------
-    const deuda = comprasProveedor.reduce((s,c)=> s + (Number(c.credito)||0),0);
-
-    document.getElementById("detalleTotalCompras").textContent = "$"+Utils.fmt(totalCompras);
-    document.getElementById("detalleTotalDeuda").textContent   = "$"+Utils.fmt(deuda);
-
-    // -------- COMPRAS PENDIENTES ----------
-    const comprasPend = comprasProveedor.filter(c => Number(c.credito) > 0);
-
-    document.getElementById("detalleComprasDeuda").innerHTML =
-        comprasPend.map(c => `
-            <div class="glass-card p-3 rounded-xl flex justify-between">
-                <span>${Utils.escHtml(c.producto || "Compra")}</span>
-                <span class="text-red-400">$${Utils.fmt(c.credito)}</span>
-            </div>
-        `).join("");
-
-    // -------- COMPRAS PAGADAS ----------
-    const comprasPagadas = comprasProveedor.filter(c => Number(c.credito) === 0);
-
-    document.getElementById("detalleComprasPagadas").innerHTML =
-        comprasPagadas.map(c => `
-            <div class="glass-card p-3 rounded-xl flex justify-between">
-                <span>${Utils.escHtml(c.producto || "Compra")}</span>
-                <span class="text-emerald-400">$${Utils.fmt(c.total)}</span>
-            </div>
-        `).join("");
-
-    // -------- PAGOS ----------
-    const pagos = _sheetPagoCompras.filter(p =>
+    // -------- PAGOS YA REGISTRADOS ----------
+    const pagosComp = (_sheetPagoCompras||[]).filter(p =>
         (p.proveedor || "").toUpperCase() === nombre.toUpperCase()
     );
 
-    document.getElementById("detallePagos").innerHTML =
-        pagos.map(p => `
-            <div class="glass-card p-3 rounded-xl flex justify-between">
-                <span>${p.fecha || ""}</span>
-                <span class="text-emerald-400">$${Utils.fmt(p.monto)}</span>
-            </div>
-        `).join("");
+    // -------- TOTAL COMPRAS ----------
+    const totalCompras = comprasProveedor.reduce((s,c)=> s + (Number(c.total)||0), 0);
+
+    // -------- DEUDA REAL (descontando pagos registrados) ----------
+    const totalPagado = pagosComp.reduce((s,p)=> s + (Number(p.monto)||0), 0);
+    const totalCredito = comprasProveedor.reduce((s,c)=> s + (Number(c.credito)||0), 0);
+    const deudaReal = Math.max(0, totalCredito - totalPagado);
+
+    document.getElementById("detalleProvTotalCompras").textContent = "$"+Utils.fmt(totalCompras);
+    document.getElementById("detalleProvTotalDeuda").textContent   = "$"+Utils.fmt(deudaReal);
+
+    // -------- COMPRAS PENDIENTES — una fila por producto ----------
+    const filasPend = [];
+    comprasProveedor.forEach(c => {
+        if ((Number(c.credito)||0) <= 0) return;
+        const idC = String(c.id || c.idCompra || '').trim();
+        const pagadoEsta = pagosComp
+            .filter(p => !idC || String(p.idCompra||p.IDCOMPRAS||'').trim() === idC)
+            .reduce((s,p)=> s+(Number(p.monto)||0), 0);
+        const saldo = Math.max(0, (Number(c.credito)||0) - pagadoEsta);
+        if (saldo <= 0) return;
+        const items = c.items && c.items.length > 0 ? c.items : [{ nombre: c.producto || '—', cantidad: 1 }];
+        items.forEach(item => filasPend.push({ c, item, saldo }));
+    });
+
+    document.getElementById("detalleProvComprasPend").innerHTML = filasPend.length === 0
+        ? '<p style="font-size:10px;color:#475569;font-weight:700;text-transform:uppercase;font-style:italic;">Sin saldo pendiente</p>'
+        : filasPend.map(({c, item, saldo}) => {
+            const nomProd = (item.cantidad > 1 ? item.cantidad+'x ' : '') + (item.nombre || '—');
+            return `<div style="background:#0f172a;border:1px solid #7f1d1d;border-radius:10px;padding:10px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                <div style="flex:1;min-width:0;">
+                    <span style="display:block;font-size:9px;font-weight:900;color:#10b981;text-transform:uppercase;">${Utils.escHtml(c.fecha||'')}</span>
+                    <span style="display:block;font-size:10px;font-weight:700;color:#cbd5e1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📦 ${Utils.escHtml(nomProd)}</span>
+                </div>
+                <span style="font-size:13px;font-weight:900;color:#f87171;font-family:monospace;">$${Utils.fmt(saldo)}</span>
+            </div>`;
+        }).join('');
+
+    // -------- COMPRAS PAGADAS — una fila por producto ----------
+    const filasPagadas = [];
+    comprasProveedor.forEach(c => {
+        const idC = String(c.id || c.idCompra || '').trim();
+        const pagadoEsta = pagosComp
+            .filter(p => !idC || String(p.idCompra||p.IDCOMPRAS||'').trim() === idC)
+            .reduce((s,p)=> s+(Number(p.monto)||0), 0);
+        const saldo = Math.max(0, (Number(c.credito)||0) - pagadoEsta);
+        if (saldo > 0) return; // sigue pendiente
+        const items = c.items && c.items.length > 0 ? c.items : [{ nombre: c.producto || '—', cantidad: 1 }];
+        items.forEach(item => filasPagadas.push({ c, item }));
+    });
+
+    document.getElementById("detalleProvComprasPagadas").innerHTML = filasPagadas.length === 0
+        ? '<p style="font-size:10px;color:#475569;font-weight:700;text-transform:uppercase;font-style:italic;">Sin compras pagadas</p>'
+        : filasPagadas.map(({c, item}) => {
+            const nomProd = (item.cantidad > 1 ? item.cantidad+'x ' : '') + (item.nombre || '—');
+            return `<div style="background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:10px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                <div style="flex:1;min-width:0;">
+                    <span style="display:block;font-size:9px;font-weight:900;color:#10b981;text-transform:uppercase;">${Utils.escHtml(c.fecha||'')}</span>
+                    <span style="display:block;font-size:10px;font-weight:700;color:#cbd5e1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📦 ${Utils.escHtml(nomProd)}</span>
+                </div>
+                <span style="font-size:13px;font-weight:900;color:#34d399;font-family:monospace;">$${Utils.fmt(c.total||0)}</span>
+            </div>`;
+        }).join('');
+
+    // -------- HISTORIAL DE PAGOS ----------
+    document.getElementById("detalleProvPagos").innerHTML = pagosComp.length === 0
+        ? '<p style="font-size:10px;color:#475569;font-weight:700;text-transform:uppercase;font-style:italic;">Sin pagos registrados</p>'
+        : pagosComp.map(p => `
+            <div style="background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:10px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <span style="display:block;font-size:9px;font-weight:900;color:#10b981;text-transform:uppercase;">${Utils.escHtml(p.fecha||'')}</span>
+                    <span style="display:block;font-size:10px;color:#94a3b8;">${Utils.escHtml(p.producto||p.formaPago||'')}</span>
+                </div>
+                <span style="font-size:13px;font-weight:900;color:#34d399;font-family:monospace;">$${Utils.fmt(p.mondo||p.monto||0)}</span>
+            </div>`).join('');
 
     // -------- ABRIR MODAL ----------
     toggleModal("modalDetalleProveedor", true);
