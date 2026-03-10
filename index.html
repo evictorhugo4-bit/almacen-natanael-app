@@ -4768,51 +4768,64 @@ function poblarSelectsInv() {
 
 function recalcularTodosLosStocks() {
 
-    const mapaStock = {};
+    // Para cada producto guardamos: { base, refNum }
+    // Prioridad: STOCK FISICO (verificación manual) > STOCK INICIAL MENSUAL > stock del sheet
+    const mapaBase   = {}; // stock base por nombre
+    const mapaRefNum = {}; // fecha de referencia como número para comparar
 
-    // Inicializar base
     _sheetProductos.forEach(p => {
-        const base = p.stockInicio != null 
-            ? parseFloat(p.stockInicio) 
-            : (parseFloat(p.stock) || 0);
+        const nombre = p.nombre.trim().toUpperCase();
 
-        mapaStock[p.nombre.trim().toUpperCase()] = base;
+        let base   = parseFloat(p.stock) || 0;
+        let refNum = null;
+
+        // Opción 1: Stock físico verificado manualmente (máxima prioridad)
+        if (p.stockFisico !== null && p.stockFisico !== undefined && p.stockFisico !== '') {
+            base   = parseFloat(p.stockFisico);
+            refNum = parseFechaNum(p.fechaStockFisico || '');
+        }
+        // Opción 2: Stock inicial mensual
+        else if (p.stockInicio !== null && p.stockInicio !== undefined && p.stockInicio !== '') {
+            base   = parseFloat(p.stockInicio);
+            refNum = parseFechaNum(p.fechaStockInicio || p.fechaVerif || '');
+        }
+
+        mapaBase[nombre]   = base;
+        mapaRefNum[nombre] = refNum; // null = sin filtro de fecha, toma todo
     });
 
-    // Restar ventas
-    (historial || []).forEach(v => {
+    // Restar ventas (solo posteriores a la fecha de referencia)
+    const todasVentas = [
+        ...historial,
+        ...(_sheetVentas || []).filter(v => !historial.some(h => h.id === v.id))
+    ];
+    todasVentas.forEach(v => {
+        const fnum = parseFechaNum(v.fechaISO || v.fecha || '');
         (v.items || []).forEach(it => {
             const nombre = String(it.nombre || '').trim().toUpperCase();
-            if (mapaStock[nombre] != null) {
-                mapaStock[nombre] -= parseFloat(it.cantidad) || 0;
-            }
+            if (mapaBase[nombre] == null) return;
+            const ref = mapaRefNum[nombre];
+            if (ref && fnum && fnum < ref) return; // anterior a la fecha base → ignorar
+            mapaBase[nombre] -= parseFloat(it.cantidad) || 0;
         });
     });
 
-    (_sheetVentas || []).forEach(v => {
-        if (historial.some(h => h.id === v.id)) return;
-        (v.items || []).forEach(it => {
-            const nombre = String(it.nombre || '').trim().toUpperCase();
-            if (mapaStock[nombre] != null) {
-                mapaStock[nombre] -= parseFloat(it.cantidad) || 0;
-            }
-        });
-    });
-
-    // Sumar compras
+    // Sumar compras (solo posteriores a la fecha de referencia)
     (_sheetCompras || []).forEach(cp => {
+        const fnum = parseFechaNum(cp.fechaISO || cp.fecha || '');
         (cp.items || []).forEach(it => {
             const nombre = String(it.nombre || '').trim().toUpperCase();
-            if (mapaStock[nombre] != null) {
-                mapaStock[nombre] += parseFloat(it.cantidad) || 0;
-            }
+            if (mapaBase[nombre] == null) return;
+            const ref = mapaRefNum[nombre];
+            if (ref && fnum && fnum < ref) return; // anterior a la fecha base → ignorar
+            mapaBase[nombre] += parseFloat(it.cantidad) || 0;
         });
     });
 
     // Guardar resultado final
     _sheetProductos.forEach(p => {
         const nombre = p.nombre.trim().toUpperCase();
-        p.stockCalculado = mapaStock[nombre] ?? 0;
+        p.stockCalculado = mapaBase[nombre] ?? 0;
     });
 }
 
@@ -9966,8 +9979,8 @@ function verDetalleProveedor(tipo, id){
 
         // SINCRONIZACIÓN GOOGLE SHEETS — Tiempo real (30s)
         // ══════════════════════════════════════════════════════
-        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbz_EJx94u_ibSm9zKB2ksA6NTnFsQTdwdPYjWVgWgzX39kn6qGeuJGRIbfk8isVkYXJ/exec';
-        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbz_EJx94u_ibSm9zKB2ksA6NTnFsQTdwdPYjWVgWgzX39kn6qGeuJGRIbfk8isVkYXJ/exec';
+        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbyFl-Bn1gk2yIyWrt2qFTcHkD-_zXBafxqq0-wvxRnygL-HXpPKAlBvfXxBrch-pa1g/exec';
+        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbyFl-Bn1gk2yIyWrt2qFTcHkD-_zXBafxqq0-wvxRnygL-HXpPKAlBvfXxBrch-pa1g/exec';
         function fetchSheets(options) {
             if (!options || options.method !== 'POST') {
                 fetch(SHEETS_URL2).catch(()=>{});
@@ -10441,8 +10454,12 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
         const depto     = String(row['DEPARTAMENTO'] || '').trim();
         const imagen    = String(row['IMAGEN'] || '').trim();
         const codigos   = String(row['CODIGOS'] || '').trim();
-        const vencimiento = String(row['VENCIMIENTO'] || '').trim();
-        const stockMin  = parseFloat(row['STOCK MINIMO X CATEGORIA'] || 0) || 0;
+        const vencimiento     = String(row['VENCIMIENTO'] || '').trim();
+        const stockMin        = parseFloat(row['STOCK MINIMO X CATEGORIA'] || 0) || 0;
+        const stockFisico     = row['STOCK FISICO'] !== undefined && row['STOCK FISICO'] !== '' ? parseFloat(row['STOCK FISICO']) : null;
+        const fechaStockFisico= String(row['FECHA STOCK FISICO'] || '').trim();
+        const stockInicioRow  = row['STOCK INICIAL MENSUAL'] !== undefined && row['STOCK INICIAL MENSUAL'] !== '' ? parseFloat(row['STOCK INICIAL MENSUAL']) : null;
+        const fechaStockInicioRow = String(row['FECHA STOCK INICIAL MENSUAL'] || '').trim();
 
         let prod = prodPorId.get(id);
 
@@ -10463,7 +10480,11 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
             prod.foto       = imagen    || prod.foto || '';
             prod.codigos    = codigos   || prod.codigos;
             prod.vencimiento= vencimiento || prod.vencimiento;
-            prod.stockMin   = stockMin;
+            prod.stockMin        = stockMin;
+            if (stockFisico !== null)      prod.stockFisico      = stockFisico;
+            if (fechaStockFisico)          prod.fechaStockFisico = fechaStockFisico;
+            if (stockInicioRow !== null)   prod.stockInicio      = stockInicioRow;
+            if (fechaStockInicioRow)       prod.fechaStockInicio = fechaStockInicioRow;
             actualizados++;
         } else {
             // crear producto nuevo desde sheet
@@ -10482,9 +10503,13 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
                 imagen:      imagen,
                 foto:        imagen || '',
                 codigos:     codigos,
-                vencimiento: vencimiento,
-                stockMin:    stockMin,
-                fromSheet:   true
+                vencimiento:      vencimiento,
+                stockMin:         stockMin,
+                stockFisico:      stockFisico,
+                fechaStockFisico: fechaStockFisico,
+                stockInicio:      stockInicioRow,
+                fechaStockInicio: fechaStockInicioRow,
+                fromSheet:        true
             };
             _sheetProductos.push(nuevo);
             agregados++;
