@@ -10539,6 +10539,7 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
 
     if (agregados > 0 || actualizados > 0) {
         indexarProductos();
+        recalcularTodosLosStocks();
         inventarioFiltrado = [..._sheetProductos];
         console.log('✓ Inventario Sheet: ' + agregados + ' nuevos, ' + actualizados + ' actualizados');
         revisarVencimientos();
