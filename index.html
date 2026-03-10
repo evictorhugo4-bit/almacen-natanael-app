@@ -3649,7 +3649,7 @@ _sheetProductos.forEach(p => {
 
         function precioItem(item) {
             const clienteActual = (document.getElementById('inputCliente')?.value || '').toUpperCase().trim();
-            const clientesEsp = ['CASA ERAZO', 'ERROR VENTAS'];
+            const clientesEsp = ['CASA ERAZO', 'ERROR VENTAS', 'ERROR VENTA'];
             const esEsp = clientesEsp.includes(clienteActual);
             const prod = _sheetProductos.find(p => p.id === item.id) || {};
             const esPeso = item.esPeso || esTipoVenta(prod.tipoVenta);
@@ -3703,7 +3703,7 @@ _sheetProductos.forEach(p => {
         function calcularCascada() {
             const container = document.getElementById('desgloseRealtime');
             const clienteActual = (document.getElementById('inputCliente')?.value || '').toUpperCase().trim();
-            const esEsp = ['CASA ERAZO', 'ERROR VENTAS'].includes(clienteActual);
+            const esEsp = ['CASA ERAZO', 'ERROR VENTAS', 'ERROR VENTA'].includes(clienteActual);
 
             const total = carrito.reduce((s, i) => s + precioItem(i), 0);
 
@@ -3730,7 +3730,7 @@ _sheetProductos.forEach(p => {
             });
 
             itemsIndividuales.forEach(item => {
-                const prod = esEsp ? (_sheetProductos.find(p => p.id === item.id) || {}) : {};
+                const prod = _sheetProductos.find(p => p.nombre === item.nombre) || _sheetProductos.find(p => p.id === item.id) || {};
                 let pUnit;
                 if (esEsp) {
                     pUnit = item.esPeso
@@ -3803,16 +3803,19 @@ function confirmarVenta() {
         return; 
     }
 
-    // 🔥 Mapa rápido de productos (elimina cientos de .find())
+    // 🔥 Mapa rápido de productos por id (en caso de ID duplicado, el carrito busca por nombre)
     const mapaProductos = Object.fromEntries(
         _sheetProductos.map(p => [p.id, p])
+    );
+    // Mapa secundario por nombre para resolver duplicados de ID
+    const mapaProductosPorNombre = Object.fromEntries(
+        _sheetProductos.map(p => [p.nombre.toUpperCase(), p])
     );
 
     const cliente  = document.getElementById('inputCliente').value.trim() || 'Consumidor Final';
     const efectivo = parseFloat(document.getElementById('inputEfectivo').value) || 0;
 
-    const clientesEspeciales = ['CASA ERAZO', 'ERROR VENTAS'];
-    const esClienteEspecial = clientesEspeciales.some(ce => cliente.toUpperCase().trim() === ce);
+    const esClienteEspecial = ['CASA ERAZO', 'ERROR VENTAS', 'ERROR VENTA'].includes(cliente.toUpperCase().trim());
 
     const totalVenta = esClienteEspecial
         ? carrito.reduce((s, i) => {
@@ -3831,7 +3834,8 @@ function confirmarVenta() {
 
     // Snapshot carrito + descuento stock
     const snapCarrito = carrito.map(c => {
-        const prod = mapaProductos[c.id] || {};
+        // Si hay duplicado de ID, buscar por nombre es más preciso
+        const prod = mapaProductosPorNombre[c.nombre?.toUpperCase()] || mapaProductos[c.id] || {};
         prod.stockCalculado = Math.max(0, (prod.stockCalculado ?? 0) - c.cantidad);
 
 
@@ -3882,7 +3886,7 @@ setTimeout(() => {
     let _efRest_v = efectivoFinal;
 
     const productosPayload = carrito.map(i => {
-        const prod = mapaProductos[i.id] || {};
+        const prod = mapaProductosPorNombre[i.nombre?.toUpperCase()] || mapaProductos[i.id] || {};
         const esPeso = i.esPeso || esTipoVenta(prod.tipoVenta);
 
 
@@ -3921,10 +3925,10 @@ _efRest_v = Math.max(0, _efRest_v - _efPaga);
             precioCosto:  costo,
             costoTotal:   costoTotal,
             precioVenta:  precioVentaFinal,
-formaPago:    _efPaga <= 0 ? 'Crédito' : (_efPaga >= importeVenta ? 'Efectivo' : 'Mixto'),
-pagoEfectivo: _efPaga,
-pagoCredito:  Math.max(0, importeVenta - _efPaga),
-pagoTotal:    importeVenta,
+formaPago:    esClienteEspecial ? 'Efectivo' : (_efPaga <= 0 ? 'Crédito' : (_efPaga >= importeVenta ? 'Efectivo' : 'Mixto')),
+pagoEfectivo: esClienteEspecial ? 0 : _efPaga,
+pagoCredito:  esClienteEspecial ? 0 : Math.max(0, importeVenta - _efPaga),
+pagoTotal:    esClienteEspecial ? 0 : importeVenta,
 ganancia:     ganancia
         };
     });
@@ -3940,11 +3944,11 @@ ganancia:     ganancia
         fechaISO:    fechaSheet(ahora),
         cliente:     cliente,
         idCliente:   idCliente,
-        efectivo:    efectivo,
-        credito:     deudaTotal,
-        total:       totalVenta,
-        formaPago:   formaPago,
-        estado:      efectivoFinal >= totalVenta ? 'Finalizado' : 'Pendiente',
+        efectivo:    esClienteEspecial ? 0 : efectivo,
+        credito:     esClienteEspecial ? 0 : deudaTotal,
+        total:       esClienteEspecial ? 0 : totalVenta,
+        formaPago:   esClienteEspecial ? 'Efectivo' : formaPago,
+        estado:      esClienteEspecial ? 'Finalizado' : (efectivoFinal >= totalVenta ? 'Finalizado' : 'Pendiente'),
         productos:   productosPayload
     };
 
