@@ -4767,34 +4767,53 @@ function poblarSelectsInv() {
        
 
 function recalcularTodosLosStocks() {
+    const mapaBase   = {};
+    const mapaRefNum = {};
 
-    // Para cada producto guardamos: { base, refNum }
-    // Prioridad: STOCK FISICO (verificación manual) > STOCK INICIAL MENSUAL > stock del sheet
-    const mapaBase   = {}; // stock base por nombre
-    const mapaRefNum = {}; // fecha de referencia como número para comparar
+    // DEBUG: mostrar datos del primer producto con stockInicio o stockFisico
+    const pDebug = _sheetProductos.find(p => p.stockInicio || p.stockFisico);
+    if (pDebug) {
+        console.log('[STOCK DEBUG]', pDebug.nombre,
+            '| stockFisico:', pDebug.stockFisico,
+            '| fechaStockFisico:', pDebug.fechaStockFisico,
+            '| stockInicio:', pDebug.stockInicio,
+            '| fechaStockInicio:', pDebug.fechaStockInicio,
+            '| parseFecha fisico:', parseFechaNum(pDebug.fechaStockFisico||''),
+            '| parseFecha inicio:', parseFechaNum(pDebug.fechaStockInicio||'')
+        );
+    }
 
     _sheetProductos.forEach(p => {
         const nombre = p.nombre.trim().toUpperCase();
 
-        let base   = parseFloat(p.stock) || 0;
-        let refNum = null;
+        // ── REGLA 1: hay STOCK FISICO verificado manualmente ──
+        const sf    = p.stockFisico;
+        const sfVal = (sf !== null && sf !== undefined && sf !== '') ? parseFloat(sf) : NaN;
+        const sfFecha = (p.fechaStockFisico && String(p.fechaStockFisico).trim()) ? parseFechaNum(p.fechaStockFisico) : null;
 
-        // Opción 1: Stock físico verificado manualmente (máxima prioridad)
-        if (p.stockFisico !== null && p.stockFisico !== undefined && p.stockFisico !== '') {
-            base   = parseFloat(p.stockFisico);
-            refNum = parseFechaNum(p.fechaStockFisico || '');
-        }
-        // Opción 2: Stock inicial mensual
-        else if (p.stockInicio !== null && p.stockInicio !== undefined && p.stockInicio !== '') {
-            base   = parseFloat(p.stockInicio);
-            refNum = parseFechaNum(p.fechaStockInicio || p.fechaVerif || '');
+        if (!isNaN(sfVal) && sfFecha) {
+            mapaBase[nombre]   = sfVal;
+            mapaRefNum[nombre] = sfFecha;
+            return;
         }
 
-        mapaBase[nombre]   = base;
-        mapaRefNum[nombre] = refNum; // null = sin filtro de fecha, toma todo
+        // ── REGLA 2: hay STOCK INICIAL MENSUAL ──
+        const si    = p.stockInicio;
+        const siVal = (si !== null && si !== undefined && si !== '') ? parseFloat(si) : NaN;
+        const siFecha = (p.fechaStockInicio && String(p.fechaStockInicio).trim()) ? parseFechaNum(p.fechaStockInicio) : null;
+
+        if (!isNaN(siVal) && siFecha) {
+            mapaBase[nombre]   = siVal;
+            mapaRefNum[nombre] = siFecha;
+            return;
+        }
+
+        // ── REGLA 3: fallback al STOCK ACTUAL del sheet sin filtro de fecha ──
+        mapaBase[nombre]   = parseFloat(p.stock) || 0;
+        mapaRefNum[nombre] = null; // sin filtro = toma todos los movimientos
     });
 
-    // Restar ventas (solo posteriores a la fecha de referencia)
+    // Restar ventas posteriores a la fecha base
     const todasVentas = [
         ...historial,
         ...(_sheetVentas || []).filter(v => !historial.some(h => h.id === v.id))
@@ -4805,24 +4824,24 @@ function recalcularTodosLosStocks() {
             const nombre = String(it.nombre || '').trim().toUpperCase();
             if (mapaBase[nombre] == null) return;
             const ref = mapaRefNum[nombre];
-            if (ref && fnum && fnum < ref) return; // anterior a la fecha base → ignorar
+            if (ref && fnum && fnum <= ref) return; // igual o anterior → ignorar
             mapaBase[nombre] -= parseFloat(it.cantidad) || 0;
         });
     });
 
-    // Sumar compras (solo posteriores a la fecha de referencia)
+    // Sumar compras posteriores a la fecha base
     (_sheetCompras || []).forEach(cp => {
         const fnum = parseFechaNum(cp.fechaISO || cp.fecha || '');
         (cp.items || []).forEach(it => {
             const nombre = String(it.nombre || '').trim().toUpperCase();
             if (mapaBase[nombre] == null) return;
             const ref = mapaRefNum[nombre];
-            if (ref && fnum && fnum < ref) return; // anterior a la fecha base → ignorar
+            if (ref && fnum && fnum <= ref) return; // igual o anterior → ignorar
             mapaBase[nombre] += parseFloat(it.cantidad) || 0;
         });
     });
 
-    // Guardar resultado final
+    // Guardar resultado
     _sheetProductos.forEach(p => {
         const nombre = p.nombre.trim().toUpperCase();
         p.stockCalculado = mapaBase[nombre] ?? 0;
