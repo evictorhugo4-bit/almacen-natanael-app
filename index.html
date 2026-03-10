@@ -12178,8 +12178,14 @@ console.log("FILTRADAS:", filtradas.length);
                     } else if (_scanModo === 'compra') {
                         cerrarScanner(); seleccionarProductoCompra(idx);
                     } else if (_scanModo === 'producto') {
-                        const f = document.getElementById('pCodigo'); if (f) f.value = codigo;
-                        cerrarScanner(); mostrarToast('✓ Código asignado');
+                        const f = document.getElementById('pCodigo');
+                        if (f) {
+                            const actual = f.value.trim();
+                            const lista = actual ? actual.split(',').map(c=>c.trim()).filter(Boolean) : [];
+                            if (!lista.includes(codigo)) lista.push(codigo);
+                            f.value = lista.join(', ');
+                        }
+                        cerrarScanner(); mostrarToast('✓ Código agregado');
                     } else if (_scanModo === 'editar_precio') {
                         cerrarScanner();
                         const f = document.getElementById('editCodigoInput'); if (f) f.value = codigo;
@@ -12192,8 +12198,14 @@ console.log("FILTRADAS:", filtradas.length);
                 document.getElementById('scanNoEncontrado').style.display = 'block';
                 if (_scanModo === 'producto') {
                     setTimeout(() => {
-                        const f = document.getElementById('pCodigo'); if (f) f.value = codigo;
-                        cerrarScanner(); mostrarToast('Código ' + codigo + ' asignado — guardá el producto');
+                        const f = document.getElementById('pCodigo');
+                        if (f) {
+                            const actual = f.value.trim();
+                            const lista = actual ? actual.split(',').map(c=>c.trim()).filter(Boolean) : [];
+                            if (!lista.includes(codigo)) lista.push(codigo);
+                            f.value = lista.join(', ');
+                        }
+                        cerrarScanner(); mostrarToast('Código ' + codigo + ' agregado — guardá el producto');
                     }, 700);
                 }
             }
