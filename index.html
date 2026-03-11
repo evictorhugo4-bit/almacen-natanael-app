@@ -3290,7 +3290,11 @@ _sheetProductos.forEach(p => {
             filtrarProductos('');
             toggleModal('modalCatalogo', true);
         }
-        function cerrarCatalogo() { toggleModal('modalCatalogo', false); }
+        function cerrarCatalogo() {
+            document.getElementById('modalCatalogo').classList.remove('modal-active');
+            const modalVenta = document.getElementById('modalVenta');
+            if (modalVenta) modalVenta.classList.add('modal-active');
+        }
         function cerrarSelector() {
 
     toggleModal('modalSelector', false);
@@ -6877,7 +6881,11 @@ function selGeneroIngEgr(val){
             toggleModal('modalCatalogoCompra', true);
         }
 
-        function cerrarCatalogoCompra() { toggleModal('modalCatalogoCompra', false); }
+        function cerrarCatalogoCompra() {
+            document.getElementById('modalCatalogoCompra').classList.remove('modal-active');
+            const modalCompra = document.getElementById('modalCompra');
+            if (modalCompra) modalCompra.classList.add('modal-active');
+        }
         function cerrarSelectorCompra() {
 
     toggleModal('modalSelectorCompra', false);
