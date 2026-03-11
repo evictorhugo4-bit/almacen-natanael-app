@@ -3664,8 +3664,43 @@ _sheetProductos.forEach(p => {
                 mostrarToast('✓ Producto encontrado: ' + prod.nombre);
             } else {
                 if (infoEl) { infoEl.textContent = '✗ Código no encontrado'; infoEl.style.display='block'; infoEl.style.color='#f87171'; }
-                mostrarToast('Código no encontrado', 'error');
+                // Ofrecer guardar el código en el producto que se está editando
+                const itemActual = carritoCompra.find(c => String(c.itemId) === String(itemEditandoId));
+                if (itemActual) {
+                    const prodActual = _sheetProductos.find(p => p.id === itemActual.id || p.nombre?.toUpperCase() === itemActual.nombre?.toUpperCase());
+                    if (prodActual) {
+                        if (infoEl) {
+                            infoEl.innerHTML = '✗ Código no encontrado &nbsp;<button onclick="guardarCodigoEnProducto('' + codigo + '','' + (prodActual.id||'') + '')" style="background:#10b981;color:#fff;border:none;border-radius:8px;padding:3px 10px;cursor:pointer;font-size:12px;">💾 Guardar en <b>' + prodActual.nombre + '</b></button>';
+                            infoEl.style.display='block'; infoEl.style.color='#f87171';
+                        }
+                    } else {
+                        mostrarToast('Código no encontrado', 'error');
+                    }
+                } else {
+                    mostrarToast('Código no encontrado', 'error');
+                }
             }
+        };
+
+        window.guardarCodigoEnProducto = function(codigo, prodId) {
+            const prod = _sheetProductos.find(p => p.id === prodId);
+            if (!prod) return;
+            const codigosActuales = String(prod.codigos || prod.codigo || '').trim();
+            const lista = codigosActuales ? codigosActuales.split(',').map(c => c.trim()).filter(Boolean) : [];
+            if (!lista.includes(codigo)) lista.push(codigo);
+            prod.codigos = lista.join(',');
+            // Actualizar también en prodPorCodigo
+            prodPorCodigo.set(codigo, prod);
+            // Enviar al sheet
+            fetchSheets({ method: 'POST', body: JSON.stringify({
+                tipo: 'producto',
+                id: prod.id,
+                nombre: prod.nombre,
+                codigos: prod.codigos
+            })});
+            const infoEl = document.getElementById('editCodigoNombre');
+            if (infoEl) { infoEl.textContent = '✓ Código guardado en ' + prod.nombre; infoEl.style.color='#10b981'; }
+            mostrarToast('✓ Código ' + codigo + ' guardado en ' + prod.nombre, 'success');
         };
 
         window.cambiarCantidadCarrito = function(itemId, delta) {
