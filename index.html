@@ -5837,6 +5837,9 @@ return;
             if (contCompDeuda) {
                 // Armar ventas agrupadas con saldo pendiente
                 const ventasPend = [];
+                // DEBUG
+                const _dbgV = todasLasVentas().find(v => { const i=String(v.idCliente||'').trim(),n=String(v.cliente||'').trim().toUpperCase(); return i?i===idCl:n===nomCl; });
+                if (_dbgV) console.warn('[DBG] id:'+_dbgV.id+' deuda:'+_dbgV.deuda+' total:'+_dbgV.total+' ticket:'+_dbgV.ticket+' keys:'+Object.keys(_dbgV).join(','));
                 todasLasVentas().forEach(v => {
                     const vId  = String(v.idCliente || '').trim();
                     const vNom = String(v.cliente   || '').trim().toUpperCase();
@@ -8175,8 +8178,8 @@ container.innerHTML = filtradasOrdenadas.map((c, idx) => {
 
         window.verTicketCompraById = function(idC) {
             const c = _sheetCompras.find(x => String(x.id||'').trim() === String(idC).trim());
-            if (!c) { Utils.toast('Compra no encontrada'); return; }
-            if (!c.ticket) { Utils.toast('Esta compra no tiene ticket'); return; }
+            if (!c) { mostrarToast('Compra no encontrada'); return; }
+            if (!c.ticket) { mostrarToast('Esta compra no tiene ticket'); return; }
             const overlay = document.getElementById('modalTicketViewer');
             const inner   = document.getElementById('ticketViewerInner');
             const titulo  = document.getElementById('ticketViewerTitulo');
@@ -10935,6 +10938,7 @@ function verDetalleProveedor(tipo, id){
                 if (Array.isArray(data.ventas)) {
                     _sheetVentas = [];
                     const ventasMap = {};
+                    if (data.ventas[0]) console.warn('[VENTAS COLS] ' + Object.keys(data.ventas[0]).join(' | ') + ' || PAGO CREDITO=' + data.ventas[0]['PAGO CREDITO'] + ' Pago Credito=' + data.ventas[0]['Pago Credito'] + ' PAGO TOTAL=' + data.ventas[0]['PAGO TOTAL']);
                     data.ventas.forEach((row) => {
                         let fechaRaw = String(row['FECHA']||row['Fecha']||row['fecha']||row['FECHA CORTA']||row['Fecha Corta']||'').trim();
                         let fechaDisplay = fechaRaw;
@@ -11578,19 +11582,28 @@ if (indicator) indicator.classList.remove('hidden');
                     if(ag>0||ac>0){const v=document.getElementById('vistaEgresos');if(v&&!v.classList.contains('hidden'))renderIngEgr('egreso');}
                 }
                 // Pagos
-                if (Array.isArray(data.pagoVentas))          _pagoVentasSheet          = data.pagoVentas.map(r=>({
-                    id:        String(r['IDPAGODEVENTAS'] || r['ID'] || '').trim(),
-                    idVenta:   String(r['IDVENTAS'] || r['IDVENTA'] || '').trim(),
-                    IDVENTAS:  String(r['IDVENTAS'] || r['IDVENTA'] || '').trim(),
-                    idCliente: String(r['IDCLIENTE'] || '').trim(),
-                    cliente:   String(r['CLIENTE'] || '').trim().toUpperCase(),
-                    monto:     parseSheetNum(r['MONTO'] || 0),
-                    MONTO:     parseSheetNum(r['MONTO'] || 0),
-                    fecha:     String(r['FECHA'] || '').trim(),
-                    producto:  String(r['PRODUCTO'] || '').trim(),
-                    formaPago: String(r['FORMA DE PAGO'] || '').trim(),
-                    fechaOrig: String(r['FECHA ORIGINAL'] || '').trim()
-                })).filter(p => p.monto > 0);
+                if (Array.isArray(data.pagoVentas)) {
+                    _pagoVentasSheet = data.pagoVentas.map(r=>({
+                        id:        String(r['IDPAGODEVENTAS'] || r['ID'] || '').trim(),
+                        idVenta:   String(r['IDVENTAS'] || r['IDVENTA'] || '').trim(),
+                        IDVENTAS:  String(r['IDVENTAS'] || r['IDVENTA'] || '').trim(),
+                        idCliente: String(r['IDCLIENTE'] || '').trim(),
+                        cliente:   String(r['CLIENTE'] || '').trim().toUpperCase(),
+                        monto:     parseSheetNum(r['MONTO'] || 0),
+                        MONTO:     parseSheetNum(r['MONTO'] || 0),
+                        fecha:     String(r['FECHA'] || '').trim(),
+                        producto:  String(r['PRODUCTO'] || '').trim(),
+                        formaPago: String(r['FORMA DE PAGO'] || '').trim(),
+                        fechaOrig: String(r['FECHA ORIGINAL'] || '').trim()
+                    })).filter(p => p.monto > 0);
+                    window._pagoVentasSheet = _pagoVentasSheet;
+                    console.log('[Sec] pagoVentas cargados:', _pagoVentasSheet.length);
+                    renderClientes();
+                    if (clienteDetalleId) {
+                        const _md = document.getElementById('modalDetalleCliente');
+                        if (_md && !_md.classList.contains('hidden')) abrirDetalleCliente(clienteDetalleId);
+                    }
+                }
                 if (Array.isArray(data.pagoCompras))          _sheetPagoCompras         = data.pagoCompras.map(r=>({IDCOMPRAS:String(r['IDCOMPRAS']||'').trim(),MONTO:parseSheetNum(r['MONTO']||0)}));
                 if (Array.isArray(data.pagoIngresos))         _sheetPagoIngresos        = data.pagoIngresos.map(r=>({IDINGRESOS:String(r['IDINGRESOS']||'').trim(),MONTO:parseSheetNum(r['MONTO']||0)}));
                 if (Array.isArray(data.pagoEgresos))          _sheetPagoEgresos         = data.pagoEgresos.map(r=>({IDEGRESOS:String(r['IDEGRESOS']||'').trim(),MONTO:parseSheetNum(r['MONTO']||0)}));
