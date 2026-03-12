@@ -10949,23 +10949,20 @@ function verDetalleProveedor(tipo, id){
                         const idVenta = String(row['IDVENTAS']||'').trim();
                         const key     = idVenta||(fechaRaw+'|'+cliente+'|'+total);
                         if (!ventasMap[key]) {
+                            // Tomar total/efectivo/deuda de la PRIMERA fila — el sheet repite estos valores en cada fila de producto
                             ventasMap[key] = {
                                 id:        idVenta||('sheet_'+key.replace(/[^a-z0-9]/gi,'_').substring(0,50)),
                                 fecha:     fechaDisplay,
                                 fechaISO:  fechaRaw,
                                 cliente:   cliente,
                                 idCliente: String(row['IDCLIENTE']||'').trim(),
-                                total:     0,
-                                efectivo:  0,
-                                deuda:     0,
+                                total:     parseSheetNum(row['PAGO TOTAL']   ||row['Pago Total']||0),
+                                efectivo:  parseSheetNum(row['PAGO EFECTIVO']||row['Pago Efectivo']||0),
+                                deuda:     parseSheetNum(row['PAGO CREDITO'] ||row['Pago credito']||row['Pago Credito']||0),
                                 fromSheet: true,
                                 items:     []
                             };
                         }
-                        // Acumular totales de todas las filas del mismo IDVENTAS
-                        ventasMap[key].total    += parseSheetNum(row['PAGO TOTAL']   ||row['Pago Total']||0);
-                        ventasMap[key].efectivo += parseSheetNum(row['PAGO EFECTIVO']||row['Pago Efectivo']||0);
-                        ventasMap[key].deuda    += parseSheetNum(row['PAGO CREDITO'] ||row['Pago credito']||row['Pago Credito']||0);
                         const rawCant = parseSheetNum(row['CANTIDAD']||row['Cantidad']||row['Cantidad Introducida']);
                         ventasMap[key].items.push({
                             nombre:    String(row['PRODUCTO']||row['Producto']||''),
