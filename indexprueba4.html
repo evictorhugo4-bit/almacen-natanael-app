@@ -8177,9 +8177,39 @@ container.innerHTML = filtradasOrdenadas.map((c, idx) => {
         }
 
         window.verTicketCompraById = function(idC) {
-            const c = _sheetCompras.find(x => String(x.id||'').trim() === String(idC).trim());
+            // Buscar compra por id exacto, o la primera del mismo proveedor con ese id de grupo
+            let c = _sheetCompras.find(x => String(x.id||'').trim() === String(idC).trim());
             if (!c) { mostrarToast('Compra no encontrada'); return; }
-            if (!c.ticket) { mostrarToast('Esta compra no tiene ticket'); return; }
+            if (!c.ticket) {
+                // Ofrecer subir ticket
+                const input = document.createElement('input');
+                input.type = 'file'; input.accept = 'image/*'; input.capture = 'environment';
+                input.onchange = function() {
+                    const file = input.files[0]; if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = function(ev) {
+                        const dataUrl = ev.target.result;
+                        c.ticket = dataUrl;
+                        // Guardar en el sheet
+                        fetchSheets({ method:'POST', body: JSON.stringify({ tipo:'compra', id:c.id, ticket:dataUrl, _soloTicket:true }) });
+                        mostrarToast('✓ Ticket guardado');
+                        // Mostrar
+                        const overlay = document.getElementById('modalTicketViewer');
+                        const inner   = document.getElementById('ticketViewerInner');
+                        const titulo  = document.getElementById('ticketViewerTitulo');
+                        titulo.textContent = 'TICKET — ' + (c.proveedor||'').toUpperCase();
+                        if (dataUrl.startsWith('data:application/pdf')) {
+                            inner.innerHTML = `<iframe src="${dataUrl}" style="width:100%;height:70vh;border:none;border-radius:8px;"></iframe>`;
+                        } else {
+                            inner.innerHTML = `<img src="${dataUrl}" style="max-width:100%;max-height:70vh;object-fit:contain;border-radius:8px;display:block;margin:0 auto;">`;
+                        }
+                        overlay.classList.remove('hidden'); overlay.style.display = 'flex';
+                    };
+                    reader.readAsDataURL(file);
+                };
+                input.click();
+                return;
+            }
             const overlay = document.getElementById('modalTicketViewer');
             const inner   = document.getElementById('ticketViewerInner');
             const titulo  = document.getElementById('ticketViewerTitulo');
@@ -9255,7 +9285,7 @@ renderIngresos();
 
     return id;
 }
-       function abrirPagoCompra(id) {
+       function abrirPagoCompra(id, montoPreset) {
 
     console.log("CLICK PAGO COMPRA", id);
 
@@ -9290,7 +9320,7 @@ renderIngresos();
     document.getElementById('pagoCompraSaldo').textContent = '$'+Utils.fmt(Math.max(0,saldo));
 
     document.getElementById('inputPagoCompraMonto').value =
-        Math.max(0,saldo) > 0 ? Math.max(0,saldo) : '';
+        montoPreset > 0 ? montoPreset : (Math.max(0,saldo) > 0 ? Math.max(0,saldo) : '');
 
     selPagoCompraFP('EFECTIVO');
 
@@ -10061,9 +10091,9 @@ window.verDetalleCategoriaGasto = function(categoria) {
     toggleModal('modalDetalleProveedor', true);
 };
 
-window.pagarItemProv = function(esGasto, id) {
-    if (esGasto) abrirPagoEgreso(id);
-    else abrirPagoCompra(id);
+window.pagarItemProv = function(esGasto, id, monto) {
+    if (esGasto) abrirPagoEgreso(id, monto);
+    else abrirPagoCompra(id, monto);
 };
 
 window.verDetalleProveedor = function(tipo, id) {
@@ -10116,8 +10146,8 @@ window.verDetalleProveedor = function(tipo, id) {
 
     // -- COMPRAS/GASTOS PENDIENTES: agrupadas por fechaISO --
     const gruposCompra = new Map();
+    if (comprasProveedor.length > 0) console.warn('[COMPRAS DBG] primera:', JSON.stringify({id:comprasProveedor[0].id, credito:comprasProveedor[0].credito, total:comprasProveedor[0].total, fechaISO:comprasProveedor[0].fechaISO, items:comprasProveedor[0].items?.length}));
     comprasProveedor.forEach(c => {
-        // Para gastos usar idSheet (= IDEGRESOS en pago), para compras usar id
         const idC = esGasto ? String(c.idSheet||c.id||'').trim() : String(c.id||'').trim();
         const pagadoEsta = esGasto
             ? pagosComp.filter(p => idC && String(p.IDEGRESOS||p.idEgreso||'').trim() === idC)
@@ -10126,32 +10156,40 @@ window.verDetalleProveedor = function(tipo, id) {
                        .reduce((s,p)=> s+(Number(p.monto)||0), 0);
         const saldo = Math.max(0, (Number(c.credito)||0) - pagadoEsta);
         if (saldo <= 0) return;
-        // Agrupar por fechaISO — mismo instante = misma compra
         const idBase = String(c.fechaISO || c.fecha || '').trim();
         if (!gruposCompra.has(idBase)) {
-            gruposCompra.set(idBase, { fecha: c.fecha, idBase, idC, saldoTotal: 0, items: [] });
+            gruposCompra.set(idBase, { fecha: c.fecha, idBase, idC, saldoTotal: 0, items: [], ticket: c.ticket || null });
         }
         const g = gruposCompra.get(idBase);
-        g.saldoTotal += saldo;
+        if (!g.ticket && c.ticket) g.ticket = c.ticket;
+        // Calcular subtotal real de cada item para el saldo proporcional
         const itemsC = c.items && c.items.length > 0 ? c.items
-            : esGasto ? [{nombre: (c.detalle||c.concepto||'—'), cantidad:1}]
-            : [{nombre: c.producto||'—', cantidad:1}];
-        itemsC.forEach(item => g.items.push(item));
+            : esGasto ? [{nombre: (c.detalle||c.concepto||'—'), cantidad:1, costo: c.credito}]
+            : [{nombre: c.producto||'—', cantidad:1, costo: c.credito}];
+        const totalItems = itemsC.reduce((s,i) => s + (parseFloat(i.costo||i.precio||0))*(parseFloat(i.cantidad)||1), 0);
+        itemsC.forEach(item => {
+            const sub = (parseFloat(item.costo||item.precio||0)) * (parseFloat(item.cantidad)||1);
+            // Saldo proporcional de este item
+            const saldoItem = totalItems > 0 ? Math.round(saldo * sub / totalItems) : sub;
+            g.items.push({...item, _saldoItem: saldoItem, _idC: idC});
+            g.saldoTotal += saldoItem;
+        });
     });
 
     const comprasPendList = Array.from(gruposCompra.values())
         .sort((a,b) => new Date(b.idBase||0) - new Date(a.idBase||0));
     document.getElementById("detalleProvComprasPend").innerHTML = comprasPendList.length === 0
         ? '<p style="font-size:10px;color:#475569;font-weight:700;text-transform:uppercase;font-style:italic;">Sin saldo pendiente</p>'
-        : comprasPendList.map(({fecha, idC, saldoTotal, items}) => {
+        : comprasPendList.map(({fecha, idC, saldoTotal, items, ticket}) => {
             const itemsHtml = items.map(item => {
                 const nom = (item.cantidad>1?item.cantidad+'x ':'')+( item.nombre||'—');
-                const subtotal = (parseFloat(item.costo||item.precio||0)) * (parseFloat(item.cantidad)||1);
+                const subtotal = item._saldoItem || (parseFloat(item.costo||item.precio||0)) * (parseFloat(item.cantidad)||1);
+                const itemIdC = item._idC || idC;
                 return `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid #1e293b20;">
                     <span style="font-size:9px;color:#94a3b8;">📦</span>
                     <span style="font-size:10px;color:#cbd5e1;flex:1;">${Utils.escHtml(nom)}</span>
                     ${subtotal > 0 ? `<span style="font-size:10px;color:#94a3b8;font-family:monospace;">$${Utils.fmt(subtotal)}</span>` : ''}
-                    <button onclick="pagarItemProv(${esGasto?1:0},'${idC}')"
+                    <button onclick="pagarItemProv(${esGasto?1:0},'${itemIdC}',${subtotal})"
                         style="padding:3px 7px;background:#064e3b;color:#34d399;border:1px solid #065f46;border-radius:6px;cursor:pointer;font-size:11px;line-height:1;"
                         title="Registrar pago">💳</button>
                 </div>`;
@@ -10953,20 +10991,24 @@ function verDetalleProveedor(tipo, id){
                         const idVenta = String(row['IDVENTAS']||'').trim();
                         const key     = idVenta||(fechaRaw+'|'+cliente+'|'+total);
                         if (!ventasMap[key]) {
-                            // Tomar total/efectivo/deuda de la PRIMERA fila — el sheet repite estos valores en cada fila de producto
+                            // Inicializar con 0 — se acumula fila a fila porque cada fila tiene el subtotal del item
                             ventasMap[key] = {
                                 id:        idVenta||('sheet_'+key.replace(/[^a-z0-9]/gi,'_').substring(0,50)),
                                 fecha:     fechaDisplay,
                                 fechaISO:  fechaRaw,
                                 cliente:   cliente,
                                 idCliente: String(row['IDCLIENTE']||'').trim(),
-                                total:     parseSheetNum(row['PAGO TOTAL']   ||row['Pago Total']||0),
-                                efectivo:  parseSheetNum(row['PAGO EFECTIVO']||row['Pago Efectivo']||0),
-                                deuda:     parseSheetNum(row['PAGO CREDITO'] ||row['Pago credito']||row['Pago Credito']||0),
+                                total:     0,
+                                efectivo:  0,
+                                deuda:     0,
                                 fromSheet: true,
                                 items:     []
                             };
                         }
+                        // Acumular subtotales de cada fila del mismo IDVENTAS
+                        ventasMap[key].total    += parseSheetNum(row['PAGO TOTAL']   ||row['Pago Total']||0);
+                        ventasMap[key].efectivo += parseSheetNum(row['PAGO EFECTIVO']||row['Pago Efectivo']||0);
+                        ventasMap[key].deuda    += parseSheetNum(row['PAGO CREDITO'] ||row['Pago credito']||row['Pago Credito']||0);
                         const rawCant = parseSheetNum(row['CANTIDAD']||row['Cantidad']||row['Cantidad Introducida']);
                         ventasMap[key].items.push({
                             nombre:    String(row['PRODUCTO']||row['Producto']||''),
@@ -11169,7 +11211,7 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
                 }
 
                 // — Sincronizar PAGO VENTAS → variable global _pagoVentasSheet —
-                if (Array.isArray(data.pagoVentas)) {
+                if (Array.isArray(data.pagoVentas) && data.pagoVentas.length > 0) {
                     _log('pagoVentas raw: ' + data.pagoVentas.length + ' filas' + (data.pagoVentas[0] ? ' | keys: ' + Object.keys(data.pagoVentas[0]).join(', ') : ''), '#94a3b8');
                     const prevLen = _pagoVentasSheet.length;
                     _pagoVentasSheet = data.pagoVentas.map(row => ({
