@@ -5492,8 +5492,8 @@ console.log("CLIENTE COMPLETO:", c);
         if (credito <= 0) return s;
         const idVenta = String(v.idVenta || v.IDVENTAS || v.id || '').trim();
         const pagadoVenta = _pagoVentasSheet
-            .filter(p => idVenta && String(p.idVenta || '').trim() === idVenta)
-            .reduce((a, p) => a + parseFloat(p.monto || 0), 0);
+            .filter(p => idVenta && (String(p.idVenta || '').trim() === idVenta || String(p.IDVENTAS || '').trim() === idVenta))
+            .reduce((a, p) => a + parseFloat(p.monto || p.MONTO || 0), 0);
         return s + Math.max(0, credito - pagadoVenta);
     }, 0);
 
@@ -5722,7 +5722,7 @@ if(!id) return;
 
 const modal = document.getElementById('modalDetalleCliente');
 
-if(clienteDetalleId === id && modal && modal.style.display === 'flex') return;
+// siempre recalcular al abrir
 
 clienteDetalleId = id;
 
@@ -5765,8 +5765,8 @@ return;
                     if (credito <= 0) return s;
                     const idVenta   = String(v.idVenta || v.IDVENTAS || v.id || '').trim();
                     const pagadoV   = _pagoVentasSheet
-                        .filter(p => idVenta && String(p.idVenta || '').trim() === idVenta)
-                        .reduce((a, p) => a + parseFloat(p.monto || 0), 0);
+                        .filter(p => idVenta && (String(p.idVenta || '').trim() === idVenta || String(p.IDVENTAS || '').trim() === idVenta))
+                        .reduce((a, p) => a + parseFloat(p.monto || p.MONTO || 0), 0);
                     return s + Math.max(0, credito - pagadoV);
                 }, 0);
             const totalComp  = todasLasVentas()
@@ -9196,12 +9196,23 @@ renderIngresos();
                 proveedor,
                 fechaOriginal:  r.fecha || ''
             })});
-            // Actualizar _pagoVentasSheet localmente al instante (sin esperar sync)
-            // Ya se hizo el push por cada item en el forEach de arriba — solo sincronizar referencia
+            // Agregar a _pagoVentasSheet con todos los campos necesarios para que
+            // getDeudaCliente lo descuente correctamente al instante
+            _pagoVentasSheet.push({
+                id, idVenta: idSheet, IDVENTAS: idSheet,
+                idCliente, IDCLIENTE: idCliente,
+                cliente: r.cliente || '',
+                monto, MONTO: monto,
+                fecha: fechaSheet(ahora),
+                producto: productoLabel,
+                formaPago: _pagoVentaFP,
+                fechaOrig: r.fecha || ''
+            });
             window._pagoVentasSheet = _pagoVentasSheet;
             toggleModal('modalPagoVenta', false);
             mostrarToast(`✓ Pago de $${Utils.fmt(monto)} registrado`);
             renderHistorial();
+            renderClientes();
             // Si el detalle de cliente está abierto, refrescarlo
             if (clienteDetalleId) abrirDetalleCliente(clienteDetalleId);
         }
