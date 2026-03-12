@@ -5865,7 +5865,7 @@ return;
                             </div>
                             <div class="flex items-center gap-2 shrink-0">
                                 <span class="text-sm font-black text-red-400 font-mono">$${Utils.fmt(saldo)}</span>
-                                <button onclick="abrirPagoDesdeVenta('${v.id || ''}', '${c.id}')"
+                                <button onclick="abrirPagoDesdeVenta('${v.id || ''}', '${c.id}', '${nomProd.replace(/'/g,"\'")}')"
                                     style="padding:6px 10px;background:#064e3b;color:#34d399;border:1px solid #065f46;border-radius:8px;cursor:pointer;font-size:13px;font-weight:900;line-height:1;"
                                     title="Registrar pago">💳</button>
                             </div>
@@ -9162,21 +9162,25 @@ renderIngresos();
             const idSheet   = _getIdSheetVenta(r);
             const ahora     = new Date();
             const id        = Utils.genId();
-            const producto  = (r.items||[]).map(i => i.nombre).join(', ');
             const idCliente = String(r.idCliente || r.idSheet || '');
+            const items = (r.items||[]).length > 0 ? r.items : [{ nombre: r.producto || '—', proveedor: '' }];
+            // Usar el producto específico que se está pagando (si viene del botón del modal cliente)
+            const productoLabel = _pagoVentaProducto || items.map(i => (i.cantidad > 1 ? i.cantidad + 'x ' : '') + (i.nombre || '—')).join(' | ');
+            const proveedor = items.map(i => i.proveedor||'').filter(Boolean)[0] || '';
+            _pagoVentaProducto = null; // limpiar después de usar
+
+            // UNA sola fila con el monto que el cliente pagó
             _sheetPagoVentas.push({
                 IDPAGODEVENTAS: id,
                 IDVENTAS:       idSheet,
                 FECHA:          fechaSheet(ahora),
                 IDCLIENTE:      idCliente,
                 CLIENTE:        r.cliente || '',
-                PRODUCTO:       producto,
+                PRODUCTO:       productoLabel,
                 'FORMA DE PAGO': _pagoVentaFP,
                 MONTO:          monto,
                 'FECHA ORIGINAL': r.fecha || ''
             });
-            
-            const proveedor = (r.items||[]).map(i=>i.proveedor||'').filter(Boolean)[0] || '';
             fetchSheets({ method:'POST', body: JSON.stringify({
                 tipo:           'pago_venta',
                 id,
@@ -9186,12 +9190,15 @@ renderIngresos();
                 fechaISO:       ahora.toISOString(),
                 idCliente:      idCliente,
                 cliente:        r.cliente || '',
-                producto:       producto,
+                producto:       productoLabel,
                 formaPago:      _pagoVentaFP,
                 monto,
                 proveedor,
                 fechaOriginal:  r.fecha || ''
             })});
+            // Actualizar _pagoVentasSheet localmente al instante (sin esperar sync)
+            // Ya se hizo el push por cada item en el forEach de arriba — solo sincronizar referencia
+            window._pagoVentasSheet = _pagoVentasSheet;
             toggleModal('modalPagoVenta', false);
             mostrarToast(`✓ Pago de $${Utils.fmt(monto)} registrado`);
             renderHistorial();
@@ -9199,7 +9206,9 @@ renderIngresos();
             if (clienteDetalleId) abrirDetalleCliente(clienteDetalleId);
         }
 
-        function abrirPagoDesdeVenta(ventaId, clienteId) {
+        let _pagoVentaProducto = null;
+        function abrirPagoDesdeVenta(ventaId, clienteId, producto) {
+            _pagoVentaProducto = producto || null;
             abrirPagoVenta(ventaId);
         }
 
@@ -10925,13 +10934,17 @@ function verDetalleProveedor(tipo, id){
                                 fechaISO:  fechaRaw,
                                 cliente:   cliente,
                                 idCliente: String(row['IDCLIENTE']||'').trim(),
-                                total:     total,
-                                efectivo:  parseSheetNum(row['PAGO EFECTIVO']||row['Pago Efectivo']),
-                                deuda:     parseSheetNum(row['PAGO CREDITO']||row['Pago credito']||row['Pago Credito']),
+                                total:     0,
+                                efectivo:  0,
+                                deuda:     0,
                                 fromSheet: true,
                                 items:     []
                             };
                         }
+                        // Acumular totales de todas las filas del mismo IDVENTAS
+                        ventasMap[key].total    += parseSheetNum(row['PAGO TOTAL']   ||row['Pago Total']||0);
+                        ventasMap[key].efectivo += parseSheetNum(row['PAGO EFECTIVO']||row['Pago Efectivo']||0);
+                        ventasMap[key].deuda    += parseSheetNum(row['PAGO CREDITO'] ||row['Pago credito']||row['Pago Credito']||0);
                         const rawCant = parseSheetNum(row['CANTIDAD']||row['Cantidad']||row['Cantidad Introducida']);
                         ventasMap[key].items.push({
                             nombre:    String(row['PRODUCTO']||row['Producto']||''),
@@ -11538,7 +11551,19 @@ if (indicator) indicator.classList.remove('hidden');
                     if(ag>0||ac>0){const v=document.getElementById('vistaEgresos');if(v&&!v.classList.contains('hidden'))renderIngEgr('egreso');}
                 }
                 // Pagos
-                if (Array.isArray(data.pagoVentas))          _pagoVentasSheet          = data.pagoVentas.map(r=>({IDVENTAS:String(r['IDVENTAS']||'').trim(),MONTO:parseSheetNum(r['MONTO']||0),formaPago:String(r['FORMA DE PAGO']||'').trim()}));
+                if (Array.isArray(data.pagoVentas))          _pagoVentasSheet          = data.pagoVentas.map(r=>({
+                    id:        String(r['IDPAGODEVENTAS'] || r['ID'] || '').trim(),
+                    idVenta:   String(r['IDVENTAS'] || r['IDVENTA'] || '').trim(),
+                    IDVENTAS:  String(r['IDVENTAS'] || r['IDVENTA'] || '').trim(),
+                    idCliente: String(r['IDCLIENTE'] || '').trim(),
+                    cliente:   String(r['CLIENTE'] || '').trim().toUpperCase(),
+                    monto:     parseSheetNum(r['MONTO'] || 0),
+                    MONTO:     parseSheetNum(r['MONTO'] || 0),
+                    fecha:     String(r['FECHA'] || '').trim(),
+                    producto:  String(r['PRODUCTO'] || '').trim(),
+                    formaPago: String(r['FORMA DE PAGO'] || '').trim(),
+                    fechaOrig: String(r['FECHA ORIGINAL'] || '').trim()
+                })).filter(p => p.monto > 0);
                 if (Array.isArray(data.pagoCompras))          _sheetPagoCompras         = data.pagoCompras.map(r=>({IDCOMPRAS:String(r['IDCOMPRAS']||'').trim(),MONTO:parseSheetNum(r['MONTO']||0)}));
                 if (Array.isArray(data.pagoIngresos))         _sheetPagoIngresos        = data.pagoIngresos.map(r=>({IDINGRESOS:String(r['IDINGRESOS']||'').trim(),MONTO:parseSheetNum(r['MONTO']||0)}));
                 if (Array.isArray(data.pagoEgresos))          _sheetPagoEgresos         = data.pagoEgresos.map(r=>({IDEGRESOS:String(r['IDEGRESOS']||'').trim(),MONTO:parseSheetNum(r['MONTO']||0)}));
