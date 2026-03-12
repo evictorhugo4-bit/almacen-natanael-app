@@ -5835,8 +5835,8 @@ return;
             // ── Compras con saldo pendiente ──────────────────────────
             const contCompDeuda = document.getElementById('detalleComprasDeuda');
             if (contCompDeuda) {
-                // Armar filas por producto individual con saldo pendiente
-                const filasPend = [];
+                // Armar ventas agrupadas con saldo pendiente
+                const ventasPend = [];
                 todasLasVentas().forEach(v => {
                     const vId  = String(v.idCliente || '').trim();
                     const vNom = String(v.cliente   || '').trim().toUpperCase();
@@ -5848,27 +5848,37 @@ return;
                         .reduce((a,p) => a + (parseFloat(p.monto)||0), 0) : 0;
                     const saldo = Math.max(0, (parseFloat(v.deuda)||0) - pagado);
                     if (saldo <= 0) return;
-                    // Una fila por item
                     const items = v.items && v.items.length > 0 ? v.items : [{ nombre: v.producto || '—', cantidad: 1, precio: v.total }];
-                    items.forEach(item => {
-                        filasPend.push({ v, item, saldo, idV });
-                    });
+                    ventasPend.push({ v, items, saldo, idV });
                 });
-                contCompDeuda.innerHTML = filasPend.length === 0
+                contCompDeuda.innerHTML = ventasPend.length === 0
                     ? '<p class="text-[10px] text-slate-600 font-bold uppercase italic">Sin saldo pendiente</p>'
-                    : filasPend.map(({ v, item, saldo, idV }) => {
-                        const nomProd = (item.cantidad > 1 ? item.cantidad + 'x ' : '') + (item.nombre || '—');
-                        return `<div class="bg-slate-900/50 p-3 rounded-xl border border-red-800 flex justify-between items-center gap-2">
-                            <div class="flex-1 min-w-0">
-                                <span class="block text-[9px] font-black text-slate-400 uppercase">${Utils.escHtml(v.fecha || '')}</span>
-                                <span class="block text-[10px] font-bold text-slate-300 truncate">📦 ${Utils.escHtml(nomProd)}</span>
+                    : ventasPend.map(({ v, items, saldo }) => {
+                        const ticketBtn = v.ticket
+                            ? `<button onclick="verTicketVentaDetalle('${v.id}')" style="padding:3px 7px;background:#1e3a5f;color:#93c5fd;border:1px solid #1d4ed8;border-radius:6px;cursor:pointer;font-size:11px;font-weight:900;" title="Ver ticket">🧾</button>`
+                            : '';
+                        const itemsHtml = items.map(item => {
+                            const nomProd = (item.cantidad > 1 ? item.cantidad + 'x ' : '') + (item.nombre || '—');
+                            const subTotal = (parseFloat(item.precio)||0) * (parseFloat(item.cantidad)||1);
+                            return `<div class="flex justify-between items-center gap-2 py-1.5 border-t border-slate-800">
+                                <span class="text-[10px] font-bold text-slate-300 flex-1 truncate">📦 ${Utils.escHtml(nomProd)}</span>
+                                <div class="flex items-center gap-1.5 shrink-0">
+                                    <span class="text-[11px] font-mono text-slate-400">$${Utils.fmt(subTotal)}</span>
+                                    <button onclick="abrirPagoDesdeVenta('${v.id || ''}', '${c.id}', '${nomProd.replace(/'/g,"\\'")}')"
+                                        style="padding:3px 8px;background:#064e3b;color:#34d399;border:1px solid #065f46;border-radius:6px;cursor:pointer;font-size:12px;font-weight:900;line-height:1;"
+                                        title="Registrar pago">💳</button>
+                                </div>
+                            </div>`;
+                        }).join('');
+                        return `<div class="bg-slate-900/50 rounded-xl border border-red-800 overflow-hidden mb-2">
+                            <div class="p-3 flex justify-between items-center gap-2">
+                                <span class="text-[9px] font-black text-slate-400 uppercase">${Utils.escHtml(v.fecha || '')}</span>
+                                <div class="flex items-center gap-2 shrink-0">
+                                    ${ticketBtn}
+                                    <span class="text-sm font-black text-red-400 font-mono">$${Utils.fmt(saldo)}</span>
+                                </div>
                             </div>
-                            <div class="flex items-center gap-2 shrink-0">
-                                <span class="text-sm font-black text-red-400 font-mono">$${Utils.fmt(saldo)}</span>
-                                <button onclick="abrirPagoDesdeVenta('${v.id || ''}', '${c.id}', '${nomProd.replace(/'/g,"\'")}')"
-                                    style="padding:6px 10px;background:#064e3b;color:#34d399;border:1px solid #065f46;border-radius:8px;cursor:pointer;font-size:13px;font-weight:900;line-height:1;"
-                                    title="Registrar pago">💳</button>
-                            </div>
+                            <div class="px-3 pb-2">${itemsHtml}</div>
                         </div>`;
                     }).join('');
             }
@@ -11411,46 +11421,7 @@ console.log('Generos cargados:', _generosEgrSheet);
                 }
 
                 // ── Sync INGRESOS NEGOCIO ──
-                const syncIngEgrNeg = (rows, db, saveFn, renderTipo, supercatsRef, catsRef) => {
-                    if (!Array.isArray(rows) || !rows.length) return;
-                    const supercatsSet = new Set(); const catsMap = {};
-                    rows.forEach(row => {
-                        const sc = String(row['SUPER CATEGORIA']||row['Supercategoria']||row['Supercategoría']||'').trim().toUpperCase();
-                        const ca = String(row['CATEGORIA']||row['Categoria']||row['Categoría']||'').trim().toUpperCase();
-                        if (sc) supercatsSet.add(sc);
-                        if (sc && ca) { if (!catsMap[sc]) catsMap[sc] = new Set(); catsMap[sc].add(ca); }
-                    });
-                    supercatsRef.length = 0; [...supercatsSet].sort().forEach(s => supercatsRef.push(s));
-                    Object.keys(catsMap).forEach(k => { catsRef[k] = [...catsMap[k]].sort(); });
-                    let ag=0, ac=0;
-                    rows.forEach(row => {
-                        let fechaRaw = String(row['FECHA']||row['Fecha']||row['Fecha...']||'').trim();
-                        let fechaDisplay = fechaRaw;
-                        try { if (fechaRaw&&(fechaRaw.includes('T')||fechaRaw.includes('-'))) { const d=new Date(fechaRaw); if(!isNaN(d)) fechaDisplay=d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}); } } catch(e){}
-                        const idRow = String(row['IDINGRESOSNEGOCIO']||row['IDEGRESOSNEGOCIO']||row['NUMERO DE INGRESOS NEGOCIO']||row['NUMERO DE EGRESOS']||row['ID_INGRESOS']||row['Id_Gastos']||'').trim();
-                        const total = parseFloat(row['PAGO TOTAL']||row['Pago Total'])||0;
-                        const key = idRow||(fechaRaw+'|'+String(row['Supercategoria']||'').trim()+'|'+total);
-                        const id = 'sheet_NN_'+key.replace(/[^a-z0-9]/gi,'_').substring(0,40);
-                        const reg = { id, idSheet: idRow, fecha:fechaDisplay, fechaISO:fechaRaw,
-                            idCliente: String(row['IDCLIENTE']||row['IdCliente']||'').trim(),
-                            cliente:   String(row['CLIENTE']||row['Cliente']||'').trim(),
-                            proveedor: String(row['CLIENTE']||row['Cliente']||'').trim(),
-                            estado:    String(row['ESTADO']||row['Estado']||'').trim(),
-                            formaPago: String(row['FORMA DE PAGO']||row['Forma de Pago']||'').trim(),
-                            total, efectivo: parseFloat(row['PAGO EFECTIVO']||row['Pago Efectivo'])||0,
-                            credito: parseFloat(row['PAGO CREDITO']||row['Pago Credito']||row['PAGO CRÉDITO'])||0,
-                            fechaPago: String(row['FECHA DE PAGO']||row['Fecha de Pago']||'').trim(),
-                            fromSheet: true, items:[] };
-                        const idx = db.findIndex(r=>r.id===id);
-                        if (idx>=0) { db[idx]={...db[idx],...reg}; ac++; } else { db.push(reg); ag++; }
-                    });
-                    if (ag>0||ac>0) {
-                       
-                        const vista = document.getElementById('vista'+renderTipo.charAt(0).toUpperCase()+renderTipo.slice(1));
-                        if (vista&&!vista.classList.contains('hidden')) renderIngNeg(renderTipo);
-                        console.log('✓ '+renderTipo+': '+ag+' nuevos, '+ac+' actualizados');
-                    }
-                };
+                const syncIngEgrNeg = window.syncIngEgrNeg; // función global definida abajo
                 syncIngEgrNeg(data.ingresosNegocio, _sheetIngresosNegocio, saveIngresosNeg, 'ingresosNegocio', _supercatsIngNegSheet, _catsIngNegSheet);
                 syncIngEgrNeg(data.egresosNegocio,  _sheetEgresosNegocio,  saveEgresosNeg,  'egresosNegocio',  _supercatsEgrNegSheet, _catsEgrNegSheet);
                 if (Array.isArray(data.pagoEgresosNegocio) && data.pagoEgresosNegocio.length > 0) {
@@ -11502,7 +11473,55 @@ if (indicator) indicator.classList.remove('hidden');
             }, 1500);
         }
 
-        // Procesa los datos secundarios (ingresos, egresos, pagos, proveedores)
+        // ── syncIngEgrNeg global (usada en sincronizarSheets y _procesarDatosSecundarios) ──
+        window.syncIngEgrNeg = function syncIngEgrNeg(rows, db, saveFn, renderTipo, supercatsRef, catsRef) {
+            if (!Array.isArray(rows) || !rows.length) return;
+            const supercatsSet = new Set(); const catsMap = {};
+            rows.forEach(row => {
+                const sc = String(row['SUPER CATEGORIA']||row['Supercategoria']||row['Supercategoría']||'').trim().toUpperCase();
+                const ca = String(row['CATEGORIA']||row['Categoria']||row['Categoría']||'').trim().toUpperCase();
+                if (sc) supercatsSet.add(sc);
+                if (sc && ca) { if (!catsMap[sc]) catsMap[sc] = new Set(); catsMap[sc].add(ca); }
+            });
+            supercatsRef.length = 0; [...supercatsSet].sort().forEach(s => supercatsRef.push(s));
+            Object.keys(catsMap).forEach(k => { catsRef[k] = [...catsMap[k]].sort(); });
+            let ag=0, ac=0;
+            rows.forEach(row => {
+                let fechaRaw = String(row['FECHA']||row['Fecha']||row['Fecha...']||'').trim();
+                let fechaDisplay = fechaRaw;
+                try { if (fechaRaw&&(fechaRaw.includes('T')||fechaRaw.includes('-'))) { const d=new Date(fechaRaw); if(!isNaN(d)) fechaDisplay=d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}); } } catch(e){}
+                const idRow = String(row['IDINGRESOSNEGOCIO']||row['IDEGRESOSNEGOCIO']||row['NUMERO DE INGRESOS NEGOCIO']||row['NUMERO DE EGRESOS']||row['ID_INGRESOS']||row['Id_Gastos']||'').trim();
+                const total = parseFloat(row['PAGO TOTAL']||row['Pago Total'])||0;
+                const key = idRow||(fechaRaw+'|'+String(row['Supercategoria']||'').trim()+'|'+total);
+                const id = 'sheet_NN_'+key.replace(/[^a-z0-9]/gi,'_').substring(0,40);
+                const reg = { id, idSheet: idRow, fecha:fechaDisplay, fechaISO:fechaRaw,
+                    idCliente: String(row['IDCLIENTE']||row['IdCliente']||'').trim(),
+                    cliente:   String(row['CLIENTE']||row['Cliente']||'').trim(),
+                    proveedor: String(row['CLIENTE']||row['Cliente']||'').trim(),
+                    estado:    String(row['ESTADO']||row['Estado']||'').trim(),
+                    formaPago: String(row['FORMA DE PAGO']||row['Forma de Pago']||'').trim(),
+                    total, efectivo: parseFloat(row['PAGO EFECTIVO']||row['Pago Efectivo'])||0,
+                    credito: parseFloat(row['PAGO CREDITO']||row['Pago Credito']||row['PAGO CRÉDITO'])||0,
+                    fechaPago: String(row['FECHA DE PAGO']||row['Fecha de Pago']||'').trim(),
+                    fromSheet: true, items:[] };
+                const idx = db.findIndex(r=>r.id===id);
+                if (idx>=0) { db[idx]={...db[idx],...reg}; ac++; } else { db.push(reg); ag++; }
+            });
+            if (ag>0||ac>0) {
+                const vista = document.getElementById('vista'+renderTipo.charAt(0).toUpperCase()+renderTipo.slice(1));
+                if (vista&&!vista.classList.contains('hidden')) renderIngNeg(renderTipo);
+                console.log('✓ '+renderTipo+': '+ag+' nuevos, '+ac+' actualizados');
+            }
+        };
+
+        window.verTicketVentaDetalle = function(ventaId) {
+            const v = todasLasVentas().find(x => x.id === ventaId);
+            if (!v || !v.ticket) return mostrarToast('Sin ticket adjunto', 'error');
+            const url = typeof v.ticket === 'string' && v.ticket.startsWith('http') ? v.ticket
+                : 'https://drive.google.com/file/d/' + v.ticket + '/view';
+            window.open(url, '_blank');
+        };
+                // Procesa los datos secundarios (ingresos, egresos, pagos, proveedores)
         // Se llama cuando llega la etapa 2 del sync en background
         function _procesarDatosSecundarios(data) {
             try {
